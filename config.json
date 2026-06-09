@@ -1,0 +1,10 @@
+{
+  "packageName": "cc-customization-expert-universal",
+  "version": "2.0.3",
+  "releaseDate": "2026-06-05",
+  "compatCloudccCliVersion": "2.5.3",
+  "runtime": "go",
+  "scope": "P0-P3 + P4-project-template-pagecomponent-hybrid-publish",
+  "canonicalComponentResource": "pagecomponent",
+  "deferred": ["pure-go-vue-build", "jsp-migration", "full-mcp-tools"]
+}

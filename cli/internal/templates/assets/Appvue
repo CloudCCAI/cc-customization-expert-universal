@@ -1,0 +1,465 @@
+<template>
+  <div class="welcome-container">
+    <!-- 渐变背景线条 -->
+    <div class="bg-lines">
+      <div class="line line-1"></div>
+      <div class="line line-2"></div>
+      <div class="line line-3"></div>
+    </div>
+
+    <!-- 主要内容 -->
+    <div class="welcome-content">
+      <div class="header">
+        <div class="logo-mark"></div>
+        <span class="tag">Welcome</span>
+      </div>
+
+      <div class="title-section">
+        <h1 class="main-title">{{ mainTitle }}</h1>
+        <div class="title-underline"></div>
+      </div>
+
+      <p class="description">{{ description }}</p>
+
+      <div class="stats">
+        <div class="stat-item" v-for="(stat, index) in stats" :key="index">
+          <div class="stat-number">{{ stat.number }}</div>
+          <div class="stat-label">{{ stat.label }}</div>
+        </div>
+      </div>
+
+      <button class="cta-button" @click="handleClick">
+        <span class="button-text">探索更多</span>
+        <span class="button-arrow">→</span>
+      </button>
+    </div>
+
+    <!-- 装饰线 -->
+    <div class="decorative-line"></div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "App",
+  data() {
+    return {
+      mainTitle: "CloudCC开发者，您好",
+      description: "开发文档：https://help.cloudcc.cn/",
+      stats: [
+        { number: "∞", label: "可能性" },
+        { number: "⚡", label: "高效开发" },
+        { number: "🚀", label: "快速上手" },
+      ],
+    };
+  },
+  methods: {
+    handleClick() {
+      console.error("探索开始");
+    },
+  },
+};
+</script>
+
+<style lang="scss" scoped>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.welcome-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fafafa;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", sans-serif;
+}
+
+// 背景线条
+.bg-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.3;
+}
+
+.line {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, #000, transparent);
+  opacity: 0.05;
+
+  &-1 {
+    width: 200%;
+    height: 1px;
+    top: 20%;
+    left: -50%;
+    animation: moveLine 8s linear infinite;
+  }
+
+  &-2 {
+    width: 200%;
+    height: 1px;
+    top: 50%;
+    right: -50%;
+    animation: moveLine 10s linear infinite reverse;
+  }
+
+  &-3 {
+    width: 200%;
+    height: 1px;
+    bottom: 20%;
+    left: -50%;
+    animation: moveLine 12s linear infinite;
+  }
+}
+
+@keyframes moveLine {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(50%);
+  }
+}
+
+// 主要内容
+.welcome-content {
+  position: relative;
+  z-index: 10;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 40px;
+  text-align: center;
+  animation: fadeInContent 0.8s ease-out;
+}
+
+@keyframes fadeInContent {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 头部
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.logo-mark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #000;
+  border-radius: 4px;
+  position: relative;
+  animation: logoRotate 2s ease-in-out infinite;
+
+  &::after {
+    content: "";
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #000;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes logoRotate {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  color: #666;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+// 标题部分
+.title-section {
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.main-title {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #000;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+}
+
+.title-underline {
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #000, transparent);
+  margin: 0 auto;
+  border-radius: 2px;
+  animation: expandWidth 0.8s ease-out 0.3s backwards;
+}
+
+@keyframes expandWidth {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 60px;
+  }
+}
+
+// 描述文本
+.description {
+  font-size: 16px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 50px;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+
+// 统计数据
+.stats {
+  display: flex;
+  justify-content: center;
+  gap: 60px;
+  margin-bottom: 50px;
+}
+
+.stat-item {
+  text-align: center;
+  opacity: 0;
+  animation: slideInStats 0.6s ease-out forwards;
+
+  &:nth-child(1) {
+    animation-delay: 0.2s;
+  }
+
+  &:nth-child(2) {
+    animation-delay: 0.3s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
+@keyframes slideInStats {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+// 按钮
+.cta-button {
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: #000;
+  border: 2px solid #000;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.8s ease-out 0.5s backwards;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: #333;
+    z-index: -1;
+    transition: left 0.3s ease;
+  }
+
+  &:hover {
+    background: #333;
+    border-color: #333;
+    transform: translateX(4px);
+
+    .button-arrow {
+      animation: arrowMove 0.3s ease;
+    }
+  }
+
+  &:active {
+    transform: translateX(2px);
+  }
+}
+
+.button-text {
+  position: relative;
+}
+
+.button-arrow {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+@keyframes arrowMove {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 装饰线
+.decorative-line {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  width: 40px;
+  height: 2px;
+  background: #000;
+  transform: translateX(-50%);
+  opacity: 0.2;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+    width: 40px;
+  }
+  50% {
+    opacity: 0.5;
+    width: 50px;
+  }
+}
+
+// 响应式
+@media (max-width: 768px) {
+  .welcome-content {
+    padding: 0 30px;
+  }
+
+  .main-title {
+    font-size: 36px;
+  }
+
+  .description {
+    font-size: 14px;
+    margin-bottom: 40px;
+  }
+
+  .stats {
+    gap: 40px;
+    margin-bottom: 40px;
+  }
+
+  .stat-number {
+    font-size: 24px;
+  }
+
+  .cta-button {
+    padding: 12px 28px;
+    font-size: 14px;
+  }
+
+  .header {
+    margin-bottom: 30px;
+  }
+
+  .title-section {
+    margin-bottom: 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-title {
+    font-size: 28px;
+  }
+
+  .description {
+    font-size: 13px;
+  }
+
+  .stats {
+    gap: 30px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .cta-button {
+    width: 100%;
+  }
+
+  .bg-lines {
+    display: none;
+  }
+}
+</style>

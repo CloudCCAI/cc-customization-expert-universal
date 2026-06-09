@@ -1,0 +1,16 @@
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.cloudcc-cache.json
+.temp
+.cache
+.idea
+frontend/build/
+frontend/node_modules/
+backend/target/
+.DS_Store
+node_modules/

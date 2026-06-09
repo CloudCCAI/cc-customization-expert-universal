@@ -1,0 +1,22 @@
+const external = process.env.NODE_ENV == 'development' ? {} : {
+    "vue": 'Vue',
+    "vue-router": 'VueRouter',
+    'vue-echarts': 'VueECharts',
+    'element-ui': 'ELEMENT',
+    "axios": 'axios',
+    "d3": 'd3',
+    'echarts': 'echarts',
+    "jschardet": 'jschardet',
+    "crypto-js": 'CryptoJS',
+    "vue-i18n": 'VueI18n',
+}
+module.exports = {
+    publicPath: '/',
+    productionSourceMap: false,
+    configureWebpack: {
+    },
+    css: { extract: false },
+    chainWebpack: config => {
+        config.externals(external)
+    }
+}
