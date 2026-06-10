@@ -7,6 +7,8 @@
 | `get` | 查询页面布局列表 |
 | `create` | 创建/复制页面布局 |
 | `delete` | 删除页面布局 |
+| `detail` | 查询页面布局详情（支持 PC / mobile） |
+| `update` | 保存布局编辑结果 |
 
 ## CLI 命令详解
 
@@ -80,4 +82,104 @@ cloudcc delete pagelayout <projectPath> <layoutId>
 ```bash
 # 删除指定页面布局
 cloudcc delete pagelayout . add202610BD89F09XyGT
+```
+
+## 查询布局详情
+
+```bash
+cloudcc detail pagelayout <projectPath> <objId> <layoutId> [type]
+```
+
+说明：
+
+- `objId`：对象标识，例如客户对象为 `account`
+- `layoutId`：布局 ID，从查询布局列表获取
+- `type`：可选，`mobile` 表示移动端布局，默认查询 PC 布局
+
+示例：
+
+```bash
+cloudcc detail pagelayout . account add100000001328m7xZh
+cloudcc detail pagelayout . account add100000001328m7xZh mobile
+```
+
+## 常用布局结构
+
+`detail` 返回结果通常在 `data` 下包含布局基础信息和 `sections`。不同环境返回的字段会有差异，编辑布局时应以当前 `detail` 返回为准。
+
+常见层级：
+
+```text
+data
+└── sections[]
+    ├── sectionId
+    ├── sectionName
+    ├── labelKey
+    ├── showDetailHeader
+    ├── showEditHeader
+    └── columns[][]
+```
+
+### Section（分组）
+
+一个 `section` 对应详情页上的一个字段分组，例如“基本信息”“联系人信息”。常用字段：
+
+| 字段 | 说明 |
+|------|------|
+| `sectionId` / `sectionid` | 分组 ID，保存时必须保留 |
+| `sectionName` | 分组名称 |
+| `labelKey` | 分组显示文案 |
+| `showDetailHeader` | 详情页是否显示分组标题 |
+| `showEditHeader` | 编辑页是否显示分组标题 |
+| `columns` | 字段列结构，通常是二维数组 |
+
+### Columns（列）
+
+`columns` 通常是二维数组：第一层表示列，第二层表示该列中的字段或组件项。双列布局常见结构如下：
+
+```json
+{
+  "sections": [
+    {
+      "sectionId": "adf201596491538bIl0N",
+      "sectionName": "基本信息",
+      "labelKey": "基本信息",
+      "showDetailHeader": true,
+      "showEditHeader": true,
+      "columns": [
+        [
+          { "fieldId": "name", "label": "名称" }
+        ],
+        [
+          { "fieldId": "ownerid", "label": "所有人" }
+        ]
+      ]
+    }
+  ]
+}
+```
+
+### 保存前建议
+
+- 从 `detail` 的 `data.sections` 复制现有结构，尽量只调整需要变更的分组、列或字段顺序。
+- 保留每个 section 的 `sectionId`，否则 `update` 会拒绝提交。
+- 不要手工保留运行时控制字段；CLI 保存前会移除 `sortOrder`、`categoriesAllowed`、`canChangeColumns`、`canDeleteSection`。
+- 如果需要移动字段，优先在同一个 `columns` 二维数组内调整字段对象的位置，避免重写整份布局。
+
+## 更新布局
+
+```bash
+cloudcc update pagelayout <projectPath> <layoutId> <encodedLayoutJSON>
+```
+
+说明：
+
+- `encodedLayoutJSON` 需要是 URL 编码后的 JSON，且必须包含 `sections` 字段（通常从 `detail` 返回的 `data.sections` 构造）
+- CLI 提交前会清理每个 section 上的 `sortOrder`、`categoriesAllowed`、`canChangeColumns`、`canDeleteSection`
+- 最终提交体使用 `{ "layoutId": "...", "layoutJson": "<string>" }` 并调用 `saveLayout`
+
+示例（仅示意）：
+
+```bash
+cloudcc update pagelayout . add100000001328m7xZh '%7B%22sections%22%3A%5B%7B%22sectionId%22%3A%22adf201596491538bIl0N%22%2C%22sectionName%22%3A%22%E5%9F%BA%E6%9C%AC%E4%BF%A1%E6%81%AF%22%2C%22labelKey%22%3A%22%E5%9F%BA%E6%9C%AC%E4%BF%A1%E6%81%AF%22%2C%22showDetailHeader%22%3Atrue%2C%22showEditHeader%22%3Atrue%2C%22columns%22%3A%5B%5B%5D%5D%7D%5D%7D'
 ```

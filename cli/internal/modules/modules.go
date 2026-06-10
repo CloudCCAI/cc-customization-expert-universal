@@ -72,7 +72,7 @@ var genericEndpoints = map[string]map[string]endpoint{
 		"delete": {"setup", "/api/menu/delete"},
 	},
 	"pagelayout": {
-		"get":    {"setup", "/api/layout/list"},
+		"get":    {"setup", "/api/layout/queryPageLayout"},
 		"create": {"setup", "/api/layout/save"},
 		"delete": {"setup", "/api/layout/delete"},
 	},
@@ -162,6 +162,8 @@ func Handle(action string, resource string, args []string, stdout io.Writer, std
 		return handlePageComponent(action, resource, args, stdout, stderr, cwd)
 	case "project":
 		return handleProject(action, args, stderr, cwd)
+	case "pagelayout":
+		return handlePageLayout(action, args, stdout, stderr, cwd)
 	case "jsp", "site", "skill":
 		return fmt.Errorf("%s %s is deferred to P4 or a later task in the Go rewrite", action, resource)
 	}
@@ -171,6 +173,135 @@ func Handle(action string, resource string, args []string, stdout io.Writer, std
 		}
 	}
 	return fmt.Errorf("unsupported command: cloudcc %s %s", action, resource)
+}
+
+func handlePageLayout(action string, args []string, stdout io.Writer, _ io.Writer, cwd string) error {
+	switch action {
+	case "detail":
+		return pageLayoutDetail(args, stdout, cwd)
+	case "get":
+		return pageLayoutList(args, stdout, cwd)
+	case "update", "save":
+		return pageLayoutSave(args, stdout, cwd)
+	default:
+		if _, ok := genericEndpoints["pagelayout"][action]; ok {
+			return callGeneric(genericEndpoints["pagelayout"][action], action, "pagelayout", args, stdout, cwd)
+		}
+	}
+	return fmt.Errorf("unsupported pagelayout action: %s", action)
+}
+
+func pageLayoutList(args []string, stdout io.Writer, cwd string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("cloudcc get pagelayout <projectPath> <prefix>")
+	}
+	projectPath := firstArg(args, cwd)
+	prefix := strings.TrimSpace(args[1])
+	body := map[string]any{"prefix": prefix}
+	cfg, err := config.Load(projectPath)
+	if err != nil {
+		return err
+	}
+	return postClass(stdout, cfg, "setup", "/api/layout/queryPageLayout", body)
+}
+
+func pageLayoutDetail(args []string, stdout io.Writer, cwd string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("cloudcc detail pagelayout <projectPath> <objId> <layoutId> [type]")
+	}
+	projectPath := firstArg(args, cwd)
+	body := map[string]any{
+		"objId":    args[1],
+		"layoutId": args[2],
+	}
+	if len(args) > 3 && strings.TrimSpace(args[3]) != "" {
+		body["type"] = args[3]
+	}
+	cfg, err := config.Load(projectPath)
+	if err != nil {
+		return err
+	}
+	return postClass(stdout, cfg, "setup", "/api/modifyLayoutLightning/queryLayout", body)
+}
+
+func pageLayoutSave(args []string, stdout io.Writer, cwd string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("cloudcc update pagelayout <projectPath> <layoutId> <encodedLayoutJSON>")
+	}
+	projectPath := firstArg(args, cwd)
+	layoutId := args[1]
+	layoutArg := args[2]
+	layout, err := jsonx.ParseEncodedObject(layoutArg, "cloudcc update pagelayout")
+	if err != nil {
+		var raw map[string]any
+		if err2 := json.Unmarshal([]byte(layoutArg), &raw); err2 == nil {
+			layout = raw
+		} else {
+			return err
+		}
+	}
+	layoutJSON, err := normalizePageLayoutJSON(layout, layoutId)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(projectPath)
+	if err != nil {
+		return err
+	}
+	body := map[string]any{
+		"layoutId":   layoutId,
+		"layoutJson": layoutJSON,
+	}
+	return postClass(stdout, cfg, "setup", "/api/modifyLayoutLightning/saveLayout", body)
+}
+
+func normalizePageLayoutJSON(layout map[string]any, layoutId string) (string, error) {
+	rawSections, ok := layout["sections"]
+	if !ok {
+		switch data := layout["data"].(type) {
+		case map[string]any:
+			rawSections = data["sections"]
+		default:
+			rawSections = layout["data"]
+		}
+	}
+	sections, ok := rawSections.([]any)
+	if !ok {
+		return "", fmt.Errorf("invalid layout payload: sections is required and must be an array")
+	}
+	for _, section := range sections {
+		m, ok := section.(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("invalid layout payload: each section must be an object")
+		}
+		sectionID := firstAny(m["sectionId"], m["sectionid"])
+		if sectionID == nil {
+			return "", fmt.Errorf("invalid layout payload: each section must include sectionId")
+		}
+		m["sectionId"] = sectionID
+		delete(m, "sortOrder")
+		delete(m, "categoriesAllowed")
+		delete(m, "canChangeColumns")
+		delete(m, "canDeleteSection")
+	}
+	if layoutId == "" {
+		if v := firstAny(layout["layoutid"], layout["layoutId"]); v != nil && fmt.Sprint(v) != "" {
+			layoutId = fmt.Sprint(v)
+		}
+		if data, ok := layout["data"].(map[string]any); ok {
+			if v := firstAny(data["layoutid"], data["layoutId"]); v != nil && fmt.Sprint(v) != "" {
+				layoutId = fmt.Sprint(v)
+			}
+		}
+	}
+	if layoutId == "" {
+		return "", fmt.Errorf("layoutId is required")
+	}
+	b, err := json.Marshal(map[string]any{"sections": sections})
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func handleProject(action string, args []string, stderr io.Writer, cwd string) error {

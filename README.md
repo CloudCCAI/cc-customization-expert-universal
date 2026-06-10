@@ -1,10 +1,10 @@
-# cc-customization-expert-universal v2.0.3
+# cc-customization-expert-universal v2.0.4
 
 CloudCC CRM 二开技能的 Universal Go 版实现。目标是替代 Node 技能中的 `node_modules` 打包方式，使用平台二进制 + embedded docs/templates 完成离线分发。
 
 - Package name: `cc-customization-expert-universal`
-- Version: `2.0.3`
-- Release date: `2026-06-09`
+- Version: `2.0.4`
+- Release date: `2026-06-10`
 
 ## Scope
 
@@ -145,8 +145,8 @@ cc-customization-expert-universal
 The version is embedded in `SKILL.md`, `README.md`, `config.json`, and the CLI `--version` output. Archive filenames may also include the version, for example:
 
 ```text
-cc-customization-expert-universal-2.0.3.tar.gz
-cc-customization-expert-universal-2.0.3.zip
+cc-customization-expert-universal-2.0.4.tar.gz
+cc-customization-expert-universal-2.0.4.zip
 ```
 
 ## Layout

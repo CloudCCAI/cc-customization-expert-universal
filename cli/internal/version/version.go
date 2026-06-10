@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const Version = "2.0.3"
+const Version = "2.0.4"
 const CompatVersion = "2.5.3"
 
 func IsVersionAction(action string) bool {

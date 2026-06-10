@@ -1,12 +1,12 @@
 ---
 name: cc-customization-expert-universal
-version: 2.0.3
+version: 2.0.4
 description: CloudCC CRM/PaaS 实施设计与开发的 Universal Go 离线技能。优先使用技能目录内置 `tools/bin/cloudcc` 获取 `platform/*` 平台能力、`methodology/*` 实施方法论、`playbooks/*` 业务方案库与模块文档，再执行 config/openapi/metadata/pagecomponent/file publish 命令。自定义页面组件统一使用 pagecomponent 命令；JSP 迁移和完整 MCP 工具注册暂不包含。
 ---
 
-# CloudCC CRM 实施专家技能 Universal v2.0.3
+# CloudCC CRM 实施专家技能 Universal v2.0.4
 
-当前技能版本：`2.0.3`。
+当前技能版本：`2.0.4`。
 技能分发名：`cc-customization-expert-universal`。
 
 ## 必须保留
