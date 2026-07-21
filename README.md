@@ -1,4 +1,4 @@
-# cc-customization-expert-universal v2.0.4
+# cc-customization-expert-uiapi v2.0.5
 
 CloudCC CRM 二开技能的 Universal Go 版实现。目标是替代 Node 技能中的 `node_modules` 打包方式，使用平台二进制 + embedded docs/templates 完成离线分发。
 
