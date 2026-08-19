@@ -11,6 +11,45 @@
 | `add` | 为权限集添加分配用户 |
 | `remove` | 从权限集移除分配用户 |
 
+## MSAPI 实施方式
+
+项目实施时，权限集应作为 `permissions` domain 纳入 MetadataService。该域可同时编排 profile 系统权限分配，以及 permission set 的定义、对象权限、字段权限和用户分配。
+
+```bash
+cloudcc plan msapi permissions @permission-set.json
+cloudcc apply msapi <planId>
+cloudcc changes msapi <operationId>
+cloudcc rollback-plan msapi <operationId>
+```
+
+权限集规格示例：
+
+```json
+{
+  "permissionSetId": "ps_sales_export",
+  "name": "销售导出权限集",
+  "description": "销售导出补充权限",
+  "userIds": ["user_001", "user_002"],
+  "objectPermissions": [
+    {
+      "category": "object",
+      "objectId": "account",
+      "objectOperateType": "1,1,0,0,0,0"
+    }
+  ],
+  "fieldPermissions": [
+    {
+      "objectId": "account",
+      "fieldId": "field_cost",
+      "visible": true,
+      "readonly": true
+    }
+  ]
+}
+```
+
+执行前应按 profile、role、sharingRule 的整体权限矩阵复核，避免权限集替代基础简档或绕过数据权限设计。
+
 ## CLI 命令详解
 
 ### 查询权限集列表

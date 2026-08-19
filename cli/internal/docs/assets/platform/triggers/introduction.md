@@ -656,6 +656,8 @@ AI 不应把触发器当成以下东西：
 
 ## 13. 最终结论
 
+平台实现上，触发器的真实元数据表是 `tp_sys_trigger`。全局扫描应使用 setup-svc 的 `POST /api/triggerSetup/getTriggerByCondition`；`POST /api/trigger/queryTriggerList` 需要 `objid`，只适用于对象级查询，不能把空 `objid` 返回的成功空列表解释为租户没有触发器。
+
 从概念上看，CloudCC 触发器最适合承接四类核心职责：
 
 - 守门：保存前、删除前、审批前的规则校验和拦截

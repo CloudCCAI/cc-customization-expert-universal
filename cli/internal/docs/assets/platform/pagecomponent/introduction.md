@@ -124,10 +124,8 @@ componentInfo: {
 
 ## 6. 开发与构建要点（本仓库）
 
-- **依赖与栈**：`package.json` 中可见 Vue
-  2、`element-ui`、`vant`、`vue-custom-element`、图表与地图等；按组件需要引入，避免无关依赖膨胀。
-- **构建脚本**：`npm run build-plugin`（`cloudccBuild`）等用于产出可发布包，与日常
-  `vue-cli-service serve` 本地调试配合使用。
+- **依赖与栈**：页面组件源码通常使用 Vue 2、组件库、图表与地图等前端依赖；按组件需要引入，避免无关依赖膨胀。
+- **预构建产物**：可发布 UMD bundle 由 Go 技能运行时之外的前端流程产出；Go CLI 只读取并上传已存在的 bundle。
 - **全局约定**：ESLint 中声明了 `$CCDK` 为只读全局，说明组件运行在注入 SDK
   的宿主环境中。
 

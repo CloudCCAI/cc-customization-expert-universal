@@ -125,7 +125,7 @@ cloudcc count staticResource <projectPath> [encodedCondJson]
 ### 按 label 查询列表
 
 ```bash
-cloudcc get staticResource . "$(node -e 'console.log(encodeURI(JSON.stringify({label:\"logo\"})))')"
+cloudcc get staticResource . '{"label":"logo"}'
 ```
 
 ### 查询容量统计
@@ -137,13 +137,13 @@ cloudcc count staticResource .
 ### 新建静态资源（上传文件）
 
 ```bash
-cloudcc create staticResource . "$(node -e "console.log(encodeURI(JSON.stringify({filePath:'./assets/logo.png',label:'logo_png',desc:'cli upload'})))")"
+cloudcc create staticResource . '{"filePath":"./assets/logo.png","label":"logo_png","desc":"cli upload"}'
 ```
 
 ### 编辑静态资源（不替换文件）
 
 ```bash
-cloudcc create staticResource . "$(node -e "console.log(encodeURI(JSON.stringify({id:'69c4f469ec9eb4d5c8a1b76d',label:'logo_png_v2',desc:'rename only'})))")"
+cloudcc create staticResource . '{"id":"69c4f469ec9eb4d5c8a1b76d","label":"logo_png_v2","desc":"rename only"}'
 ```
 
 ---
@@ -151,7 +151,6 @@ cloudcc create staticResource . "$(node -e "console.log(encodeURI(JSON.stringify
 ## 4. Checklist
 
 - [ ] 已在正确项目目录执行命令（或显式传入 `projectPath`）
-- [ ] 列表查询条件已按 `encodeURI(JSON.stringify(...))` 传入
+- [ ] 列表查询条件已按原始 JSON 或 `@file.json` 传入
 - [ ] 删除前已确认资源未被页面/脚本/组件引用
 - [ ] 上传前已先执行容量统计
-

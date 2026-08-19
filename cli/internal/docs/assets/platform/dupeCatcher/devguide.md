@@ -109,17 +109,16 @@ cloudcc get dupeCatcher .
 > 关键字段（与页面一致）：`name`、`objid`、`insertoperation`、`updateoperation`、`conditionVals` 等。
 
 ```bash
-cloudcc create dupeCatcher . filter "$(node -e "console.log(encodeURI(JSON.stringify({name:'测试过滤器',objid:'<objid>',errormessage:'',insertoperation:'check',insertIsSave:'1',insertIsTips:'1',updateoperation:'check',updateIsSave:'1',updateIsTips:'1',isprofile:false,isactive:true,conditionVals:'{}'})))")"
+cloudcc create dupeCatcher . filter '{"name":"测试过滤器","objid":"<objid>","errormessage":"","insertoperation":"check","insertIsSave":"1","insertIsTips":"1","updateoperation":"check","updateIsSave":"1","updateIsTips":"1","isprofile":false,"isactive":true,"conditionVals":"{}"}'
 ```
 
 ### 4.3 保存规则（新建）
 
 ```bash
-cloudcc create dupeCatcher . rule "$(node -e "console.log(encodeURI(JSON.stringify({filterid:'<filterid>',fieldid:'<fieldid>',matchoption:'exact',firstletters:'',isblank:0})))")"
+cloudcc create dupeCatcher . rule '{"filterid":"<filterid>","fieldid":"<fieldid>","matchoption":"exact","firstletters":"","isblank":0}'
 ```
 
 ## 5. 注意事项
 
 - `filterid` / `ruleid` / `objid` / `fieldid` 都来自平台返回数据，请先通过列表/详情接口获取。
 - `conditionVals` 是页面条件面板产出的 **json 字符串**（不是对象），请按接口要求传入字符串。
-

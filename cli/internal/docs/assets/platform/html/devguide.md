@@ -138,11 +138,7 @@ cloudcc get html [projectPath] [encodedBodyJson]
 ```bash
 cloudcc get html
 cloudcc get html ./
-cloudcc get html ./ "$(node -e 'console.log(encodeURI(JSON.stringify({
-  pageNo: 1,
-  pageSize: 50,
-  condition: { htmlLabel: "helloa", apiName: "helloa" }
-})))')"
+cloudcc get html ./ '{"pageNo":1,"pageSize":50,"condition":{"htmlLabel":"helloa","apiName":"helloa"}}'
 ```
 
 成功时，标准输出为**分页数据** JSON（含列表与总数等字段，以实际返回为准）。

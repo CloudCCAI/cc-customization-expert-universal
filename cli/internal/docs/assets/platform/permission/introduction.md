@@ -2,6 +2,8 @@
 
 Permission 模块用于管理 CloudCC 权限集的分配功能，包括查看权限集列表、查看已分配用户、添加分配用户和删除分配用户。
 
+在项目实施中，权限集属于 MSAPI `permissions` domain：权限集定义、对象权限、字段权限、系统权限和用户分配都应优先通过 MetadataService `plan/apply/changes/rollback` 编排；旧 `get/add/remove` 命令继续用于查询和兼容性操作。
+
 ## 功能介绍
 
 - **查看权限集列表**: 获取系统中的所有权限集
@@ -12,6 +14,15 @@ Permission 模块用于管理 CloudCC 权限集的分配功能，包括查看权
 ## 命令
 
 命令统一为 **`cloudcc <动作> <资源> …`**；本模块资源名为 **`permission`**。
+
+### MSAPI 计划
+
+```bash
+cloudcc plan msapi permissions @permission-set.json
+cloudcc apply msapi <planId>
+cloudcc changes msapi <operationId>
+cloudcc rollback-plan msapi <operationId>
+```
 
 ### 获取权限集列表
 

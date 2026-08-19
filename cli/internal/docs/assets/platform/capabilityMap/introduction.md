@@ -6,6 +6,26 @@
 
 ## 常见需求到模块映射
 
+### 盘点标准应用和标准对象承载能力
+
+推荐模块：
+
+```text
+msapi scanner -> application/menu -> object/fields -> recordType/pagelayout -> profile/sharingRule
+```
+
+推荐命令：
+
+```bash
+cloudcc scan msapi <projectPath> standard-catalog
+```
+
+说明：
+
+- 该扫描只读输出目标租户已安装或已启用的标准应用、菜单、对象、字段，以及标准/自定义 origin。
+- CloudCC 平台本身可能内置 CRM 全流程标准功能，以及商务云、CPQ、现场服务云、客户服务云、项目云、伙伴云、利润云等标准应用。实施方案必须先扫描目标租户实际能力，再决定复用、扩展或新建。
+- 对象字段建模时，标准对象优先；标准对象字段不足时优先扩展；只有标准能力无法表达业务语义或生命周期时才创建自定义对象。
+
 ### 创建一个业务应用
 
 推荐模块：
@@ -107,6 +127,7 @@ project/config -> almRelease -> package -> classes/triggers/pagecomponent/static
 | 集成 | OpenAPI、服务端类、SSO、sidecar | openapi, classes, integrationArchitecture |
 | 移动端 | 移动布局、离线、扫一扫、签到 | mobileCapabilities |
 | 交付 | 项目配置、软件包、多环境发布 | project, config, almRelease |
+| 标准应用目录 | CRM、商务云、CPQ、现场服务云、客户服务云、项目云、伙伴云、利润云 | application, menu, object, fields, standard-catalog |
 
 ## 使用建议
 

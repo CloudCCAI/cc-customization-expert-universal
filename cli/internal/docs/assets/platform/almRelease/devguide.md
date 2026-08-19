@@ -73,6 +73,20 @@ cloudcc publish pagecomponent <name> [projectPath]
 cloudcc publish staticResource ...
 ```
 
+类、触发器和定时类不是直接 save：classes 会先做本地 `FagTemplate` 编译验证，再调用目标 setup-svc validate；triggers 和 timer 不做本地包装编译，只调用目标 setup-svc validate。验证通过后才保存。
+
+从 CLI/技能 `2.2.7` 开始，高代码发布依赖 setup-svc validate 接口，目标 setup-svc 最低版本要求为 `19.3.R20`。低于该版本的环境缺少 `/api/ccfag/validate`、`/api/trigger/validate` 或 `/api/ccPeak/validate` 时，不能使用新的 publish 门禁流程。
+
+| 资源 | 本地验证 | 远程 validate | 保存 |
+| --- | --- | --- | --- |
+| classes | `FagTemplate` 编译 | `POST /api/ccfag/validate` | `POST /api/ccfag/save` |
+| triggers | 不执行本地包装编译 | `POST /api/trigger/validate` | `POST /api/triggerSetup/saveTrigger` |
+| timer | 不执行本地包装编译 | `POST /api/ccPeak/validate` | `POST /api/ccPeak/save` |
+
+validate 实际读取字段需要按资源区分：classes/timer 的 validate 只编译 `source`；trigger 的 validate 会读取 `triggerSource`、`apiname`、`triggerTime`、`version`，其中 `triggerTime` 决定是否按 batch trigger 编译。CLI 可能额外携带 `id`、`name`、`folderId/folderid`、`isactive`、`targetObjectId`、`remark` 等字段，是为了和后续 save payload 保持一致，不代表这些字段都参与 validate 编译判断。
+
+validate 失败时，CLI 会把本地 classes 编译诊断或 setup-svc 的 `returnInfo`、`data.errors`、`data.warnings`、原始 `responseBody` 返回给调用方，并停止后续 save。trigger 需要特别注意编码：`/api/trigger/validate` 直接传原始源码，`/api/triggerSetup/saveTrigger` 才传 URLDecoder-compatible 编码源码；classes/timer 的 validate 和 save 都传编码源码，源码字面量 `+` 会保留为 `%2B`。
+
 具体参数以对应模块 `devguide` 为准。
 
 ## 软件包使用边界

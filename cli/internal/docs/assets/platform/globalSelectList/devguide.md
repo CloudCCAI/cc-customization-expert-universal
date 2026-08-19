@@ -24,7 +24,7 @@
 | 字段             | 参数名            | 是否必填 | 说明                                    |
 |------------------|-------------------|----------|-----------------------------------------|
 | 标签             | label             | 是       | 显示名称，如"客户等级"                 |
-| 名称             | name              | 是       | API 名称，如"customer_level"           |
+| 名称             | name              | 是       | API 名称，如"khdj"                    |
 | 描述             | description       | 否       | 对该选项列表用途的说明                  |
 | 选项值列表       | ptext             | 否       | 每行一个值，行之间用 `\r\n` 分隔        |
 | 按字母顺序排序   | isPicklistSorted  | 否       | `"1"` 表示启用，`"0"` 表示禁用          |
@@ -35,7 +35,7 @@
 参数使用 `encodeURI` 编码后传入（保留 `"` 和 `:` 等 JSON 必要字符）：
 
 ```bash
-cloudcc create globalSelectList . '%7B%22label%22:%22%E5%AE%A2%E6%88%B7%E7%AD%89%E7%BA%A7%22,%22name%22:%22customer_level%22,%22description%22:%22%E5%AE%A2%E6%88%B7%E7%AD%89%E7%BA%A7%E5%88%86%E7%B1%BB%22,%22ptext%22:%22%E6%99%AE%E9%80%9A%5Cr%5Cn%E9%93%B6%E7%89%8C%5Cr%5Cn%E9%87%91%E7%89%8C%22,%22isPicklistSorted%22:%220%22,%22isFirstDefault%22:%220%22%7D'
+cloudcc create globalSelectList . '%7B%22label%22:%22%E5%AE%A2%E6%88%B7%E7%AD%89%E7%BA%A7%22,%22name%22:%22khdj%22,%22description%22:%22%E5%AE%A2%E6%88%B7%E7%AD%89%E7%BA%A7%E5%88%86%E7%B1%BB%22,%22ptext%22:%22%E6%99%AE%E9%80%9A%5Cr%5Cn%E9%93%B6%E7%89%8C%5Cr%5Cn%E9%87%91%E7%89%8C%22,%22isPicklistSorted%22:%220%22,%22isFirstDefault%22:%220%22%7D'
 ```
 
 原始 JSON（`encodeURI` 编码前）：
@@ -43,7 +43,7 @@ cloudcc create globalSelectList . '%7B%22label%22:%22%E5%AE%A2%E6%88%B7%E7%AD%89
 ```json
 {
   "label": "客户等级",
-  "name": "customer_level",
+  "name": "khdj",
   "description": "客户等级分类",
   "ptext": "普通\r\n银牌\r\n金牌",
   "isPicklistSorted": "0",
@@ -149,5 +149,4 @@ cloudcc doc platform/globalSelectList introduction
 # 查看操作指南（本文）
 cloudcc doc platform/globalSelectList devguide
 ```
-
 

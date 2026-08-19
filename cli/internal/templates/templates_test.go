@@ -16,13 +16,9 @@ func TestWriteProjectUsesCanonicalLayout(t *testing.T) {
 	for _, path := range []string{
 		"cloudcc-cli.config.json",
 		".gitignore",
-		"frontend/package.json",
-		"frontend/vue.config.js",
-		"frontend/babel.config.js",
-		"frontend/public/index.html",
-		"frontend/src/main.js",
-		"frontend/src/App.vue",
+		"frontend/README.md",
 		"frontend/pagecomponents",
+		"frontend/build",
 		"backend/classes",
 		"backend/triggers",
 		"backend/schedule",
@@ -40,8 +36,13 @@ func TestWriteProjectUsesCanonicalLayout(t *testing.T) {
 		".claude",
 		"doc",
 		"package.json",
+		"frontend/package.json",
+		"frontend/vue.config.js",
+		"frontend/babel.config.js",
 		"src",
 		"public",
+		"frontend/src",
+		"frontend/public",
 		"lib",
 		"plugins",
 	} {
@@ -49,22 +50,15 @@ func TestWriteProjectUsesCanonicalLayout(t *testing.T) {
 			t.Fatalf("unexpected legacy path %s, statErr=%v", path, err)
 		}
 	}
-	packageJSON, err := os.ReadFile(filepath.Join(target, "frontend", "package.json"))
+	frontendReadme, err := os.ReadFile(filepath.Join(target, "frontend", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(packageJSON), "cloudcc-plugin") {
-		t.Fatalf("package.json still contains legacy plugin naming: %s", packageJSON)
+	if strings.Contains(string(frontendReadme), "node") || strings.Contains(string(frontendReadme), "npm") {
+		t.Fatalf("frontend README should not create a Node/npm dependency: %s", frontendReadme)
 	}
-	if !strings.Contains(string(packageJSON), "pagecomponent") {
-		t.Fatalf("package.json should use pagecomponent naming: %s", packageJSON)
-	}
-	indexHTML, err := os.ReadFile(filepath.Join(target, "frontend", "public", "index.html"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(indexHTML), "Plugin Dev") || !strings.Contains(string(indexHTML), "PageComponent Dev") {
-		t.Fatalf("index.html naming mismatch: %s", indexHTML)
+	if !strings.Contains(string(frontendReadme), "pagecomponent") || !strings.Contains(string(frontendReadme), "prebuilt UMD") {
+		t.Fatalf("frontend README should describe pagecomponent prebuilt bundle flow: %s", frontendReadme)
 	}
 }
 

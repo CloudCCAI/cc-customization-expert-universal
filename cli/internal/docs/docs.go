@@ -61,6 +61,9 @@ func Read(module string, kind string) (string, error) {
 
 func normalizeModule(module string) string {
 	module = strings.TrimSpace(strings.ReplaceAll(module, "\\", "/"))
+	if module == "report" {
+		return "platform/report"
+	}
 	if module == "" {
 		return ""
 	}

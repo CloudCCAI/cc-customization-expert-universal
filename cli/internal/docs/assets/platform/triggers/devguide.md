@@ -12,7 +12,8 @@
 ## 2. 开发规范
 
 - 一个对象的一个触发时机，只创建一个触发器
-- 创建触发器时，推荐使用自动创建自定义类模式：`cloudcc create triggers <encodedCreateJson> true`
+- 创建本地触发器骨架使用：`cloudcc create trigger <objectApi/TriggerName> [projectPath]`。
+- 直接保存线上元数据使用：`cloudcc create trigger <projectPath> <triggerJson|@file>`。
 - 尽量不要在触发器中直接开发业务逻辑
 - 需要复用、编排、扩展的逻辑，统一下沉到自定义类
 
@@ -100,159 +101,112 @@ public class MyTriggerService {
 // @SOURCE_CONTENT_END
 ```
 
-## 8. triggers 模块支持的 CLI 命令总览（重点：入参）
+## 9. 触发器元数据与 CLI 契约
 
-说明：
+触发器的真实元数据表是 `tp_sys_trigger`。它属于 CloudCC 原生高代码资源，不属于 MetadataService 低代码账本。资源名 `trigger` 与 `triggers` 完全等价；命令参数统一为“项目路径优先”。
 
-- 下文命令中的资源名使用 `triggers`。
-- `projectPath` 未传时，默认使用当前工作目录。
+不能根据 REST 命名习惯猜测 `/api/trigger/list`、`/api/trigger/detail` 或 `/api/trigger/delete`。真实 setup-svc 契约如下：
 
-#### 1) 创建触发器
+| 操作 | 真实端点 | 关键请求 |
+| --- | --- | --- |
+| 全局列表 | `POST /api/triggerSetup/getTriggerByCondition` | `shownum`、`showpage`、`sname`、`objId`、`fid`、`rptcond`、`rptorder` |
+| 详情 | `POST /api/trigger/newobjtrigger` | `{ "id": "<triggerId>" }` |
+| 发布前校验 | `POST /api/trigger/validate` | 当前触发器源码和元数据 |
+| 创建/更新 | `POST /api/triggerSetup/saveTrigger` | `TpSysTriggerVO` 字段 |
+| 删除 | `POST /api/triggerSetup/deleteTrigger` | `{ "id": "<triggerId>" }` |
 
-命令：
+`POST /api/trigger/queryTriggerList` 是按 `objid` 查询的对象级接口，不是全局列表。没有 `objid` 时即使返回成功和空列表，也不能据此判断租户没有触发器。
 
-```bash
-cloudcc create triggers <encodedCreateJson> [autoCreateClass]
-```
-
-`encodedCreateJson`（先 JSON.stringify，再 encodeURI）推荐字段：
-
-| 字段              | 必填 | 类型     | 说明                                                   |
-| ----------------- | ---- | -------- | ------------------------------------------------------ |
-| `schemetableName` | 是   | `string` | 目标对象 API 名（目录中会转小写）                      |
-| `targetObjectId`  | 是   | `string` | 目标对象 ID                                            |
-| `triggerTime`     | 是   | `string` | 触发时机，如 `beforeInsert`、`afterUpdate`、`approval` |
-| `name`            | 是   | `string` | 触发器名称，必须使用英文                                             |
-| `apiname`         | 建议 | `string` | 触发器 API 名                                          |
-
-`autoCreateClass`（可选）：
-
-| 参数              | 必填 | 类型      | 说明                                                                 |
-| ----------------- | ---- | --------- | -------------------------------------------------------------------- |
-| `autoCreateClass` | 否   | `boolean` | 是否自动创建配套自定义类；默认 `false`，传 `true` 开启推荐自动创建模式 |
-
-#### 2) 发布触发器
-
-命令：
+### 9.1 查询全局列表
 
 ```bash
-cloudcc publish triggers <namePath>
+cloudcc get trigger <projectPath> [nameOrQueryJson]
+cloudcc get triggers <projectPath> [nameOrQueryJson]
 ```
 
-参数：
-
-| 参数       | 必填 | 类型     | 说明                                    |
-| ---------- | ---- | -------- | --------------------------------------- |
-| `namePath` | 是   | `string` | 触发器路径，格式：`对象小写名/触发器名` |
-
-#### 3) 拉取触发器（按本地路径）
-
-命令：
-
-```bash
-cloudcc pull triggers <namePath>
-```
-
-参数：
-
-| 参数       | 必填 | 类型     | 说明                                                                             |
-| ---------- | ---- | -------- | -------------------------------------------------------------------------------- |
-| `namePath` | 是   | `string` | 触发器路径，格式：`对象小写名/触发器名`；会读取该目录 `config.json` 的 `id` 拉取 |
-
-#### 4) 查询触发器列表（支持条件查询）
-
-命令：
-
-```bash
-cloudcc get triggers <listQueryJson> [projectPath]
-```
-
-`listQueryJson` 推荐结构：
+不传查询条件时，CLI 使用：
 
 ```json
 {
-    "shownum": 2000,
-    "showpage": 1,
-    "sname": "",
-    "objId": ""
+  "shownum": "2000",
+  "showpage": "1",
+  "sname": "",
+  "objId": "",
+  "fid": "",
+  "rptcond": "lastmodifydate",
+  "rptorder": "desc"
 }
 ```
 
-字段语义：
+第二个参数可以是名称字符串，也可以是 JSON/`@file` 覆盖上述查询字段。
 
-| 字段       | 含义              | 类型     | 是否推荐 | 说明                           |
-| ---------- | ----------------- | -------- | -------- | ------------------------------ |
-| `shownum`  | 每页条数          | `number  | string`  | 推荐                           |
-| `showpage` | 页码              | `number  | string`  | 推荐                           |
-| `sname`    | 触发器名字        | `string` | 可选     | 按名称模糊筛选，模糊查询       |
-| `objId`    | 触发器作用对象 ID | `string` | 可选     | 对象id（对象筛选优先用该字段） |
-
-#### 5) 查看触发器详情
-
-命令：
+### 9.2 查询详情与删除
 
 ```bash
-cloudcc detail triggers <namePath> <id>
+cloudcc detail trigger <projectPath> <id|name|apiName>
+cloudcc delete trigger <projectPath> <id|name|apiName>
 ```
 
-参数规则（实现口径）：
+CLI 会先从全局列表按 `id`、`name`、`apiname` 或 `apiName` 精确解析唯一 ID，再调用详情或删除端点。名称/API 名匹配到多条时必须失败并要求使用唯一 ID，禁止猜测后执行删除。
 
-| 参数       | 必填     | 类型     | 说明                                             |
-| ---------- | -------- | -------- | ------------------------------------------------ |
-| `namePath` | 条件必填 | `string` | 传 `namePath` 时优先查本地；本地不完整时再走线上 |
-| `id`       | 条件必填 | `string` | 当 `namePath` 为空时，必须传 `id` 走线上查询     |
+`pull` 和 `pullList` 当前与 `detail` 使用同一只读详情契约并输出服务端响应，不宣称已经写入本地目录。
 
-等价理解：`namePath` 与 `id` 至少传一个，优先使用 `namePath` 路径。
+### 9.3 创建、更新与发布
 
-#### 6) 按 ID 拉取并落地到本地目录
-
-命令：
+直接保存元数据：
 
 ```bash
-cloudcc pullList triggers <id> <projectPath>
+cloudcc create trigger <projectPath> <triggerJson|@file>
+cloudcc update trigger <projectPath> <triggerJson|@file>
+cloudcc save trigger <projectPath> <triggerJson|@file>
 ```
 
-参数：
+`update` 必须包含 `id`。常用字段包括 `id`、`name`、`apiname`、`apiName`、`isactive`、`folderid`、`version`、`triggerTime`、`targetObjectId`、`remark` 和 `triggerSource`。可以用 `sourceFile` 指向带 SOURCE 标记的本地 Java 文件；CLI 会读取标记内内容。
 
-| 参数          | 必填 | 类型     | 说明                                                        |
-| ------------- | ---- | -------- | ----------------------------------------------------------- |
-| `id`          | 是   | `string` | 线上触发器 ID                                               |
-| `projectPath` | 是   | `string` | 项目根目录；会写入到 `<projectPath>/triggers/<obj>/<name>/` |
-
-#### 7) 删除触发器
-
-命令：
+创建本地骨架与发布：
 
 ```bash
-cloudcc delete triggers <namePathOrId> [projectPath]
+cloudcc create trigger <objectApi/TriggerName> [projectPath]
+cloudcc publish trigger <objectApi/TriggerName> [projectPath]
 ```
 
-参数规则：
+`publish trigger` 的发布顺序固定为：
 
-| 参数           | 必填 | 类型     | 说明                                                                                  |
-| -------------- | ---- | -------- | ------------------------------------------------------------------------------------- |
-| `namePathOrId` | 是   | `string` | 可传触发器路径或线上 ID；若本地路径存在且 `config.json` 含 `id`，优先使用该 `id` 删除 |
-| `projectPath`  | 否   | `string` | 项目根目录，默认当前目录                                                              |
+1. 远程 validate，调用 `POST /api/trigger/validate`。
+2. 保存，调用 `POST /api/triggerSetup/saveTrigger`。
 
-#### 8) 文档命令
 
-命令：
+远程 validate 失败时，CLI 必须返回 setup-svc 的 `returnInfo`、`data.errors`、`data.warnings` 和原始 `responseBody`，并且不能继续 save。
+
+从 CLI/技能 `2.2.7` 开始，`publish trigger` 要求目标 setup-svc 至少为 `19.3.R20`，因为旧版本 setup-svc 不提供 `/api/trigger/validate`。
+
+`/api/trigger/validate` 的实际入参类型是 `TriggerVo`。服务端实际读取：
+
+| 字段 | validate 中的作用 | 是否必须 |
+| --- | --- | --- |
+| `triggerSource` | 待编译触发器源码 | 必须，不能为空 |
+| `apiname` | 编译时使用的触发器 API 名；为空时服务端默认 `TriggerFunctionImpl` | 建议传，避免类名/诊断上下文退化为默认值 |
+| `triggerTime` | 判断是否 batch trigger：`beforeBatch`、`afterBatch`、`commitBatch` 会按 batch 模板编译 | batch 触发器必须传；普通触发器建议传 |
+| `version` | 传给编译器的触发器版本 | 建议传；CLI 默认 `2` |
+
+CLI 还会随 validate body 带上 `id`、`name`、`isactive`、`targetObjectId`、`remark`、`folderid`、`apiName` 等字段，这是为了和后续 `/api/triggerSetup/saveTrigger` payload 保持一致；这些字段不参与 validate 编译判断。
+
+trigger 的 validate 和 save 编码规则不同：`/api/trigger/validate` 不做 URLDecoder 解码，所以 CLI 直接传原始 `triggerSource`；`/api/triggerSetup/saveTrigger` 会用 Java `URLDecoder` 解码 `triggerSource`，CLI 必须使用 query-component 兼容编码，确保源码里的字面量 `+` 编码为 `%2B`，不能使用会保留 `+` 的 path escaping。
+
+业务响应出现 `result=false` 或失败 `returnCode` 时，CLI 必须返回错误并保留原始响应体，不能把 HTTP 200 当作保存成功。
+
+### 9.4 文档命令
 
 ```bash
-cloudcc doc platform/triggers <introduction|devguide>
+cloudcc doc platform/triggers introduction
+cloudcc doc platform/triggers devguide
 ```
 
-参数：
-
-| 参数          | 必填      | 类型 | 说明     |
-| ------------- | --------- | ---- | -------- |
-| `introduction | devguide` | 是   | `string` |
-
-## 7. 当前项目中触发器的真实约束
+## 10. 当前项目中触发器的真实约束
 
 这是 AI 最容易忽视、但必须先接受的现实约束。
 
-### 7.1 触发器不是普通 Java 类容器
+### 10.1 触发器不是普通 Java 类容器
 
 根据当前项目的实际文件结构，触发器目录位于：
 
@@ -270,13 +224,13 @@ cloudcc doc platform/triggers <introduction|devguide>
 - 不适合承载超长业务逻辑
 - 更不适合在触发器里构建一整套复杂服务
 
-## 8. AI 必须遵守的硬规则
+## 11. AI 必须遵守的硬规则
 
-### 8.1 只能通过 cloudcc-cli 管理触发器目录
+### 11.1 只能通过 cloudcc-cli 管理触发器目录
 
 不得手工创建或复制 `triggers/...` 目录，不得私自构造 `config.json`。
 
-### 8.2 只能在 SOURCE 区域内写业务逻辑
+### 11.2 只能在 SOURCE 区域内写业务逻辑
 
 AI 修改已有触发器时，只能修改：
 
@@ -295,7 +249,7 @@ AI 修改已有触发器时，只能修改：
 - `config.json`
 - SOURCE 标记外的框架代码
 
-### 8.3 不得私改 `config.json` 的身份字段
+### 11.3 不得私改 `config.json` 的身份字段
 
 尤其不要私自改动：
 
@@ -307,7 +261,7 @@ AI 修改已有触发器时，只能修改：
 
 这些字段应通过创建、发布、拉取、云端同步保持一致。
 
-### 8.4 必须保留 `userInfo` 上下文
+### 11.4 必须保留 `userInfo` 上下文
 
 所有 SDK 能力都应围绕当前上下文用户执行。
 
@@ -317,13 +271,13 @@ AI 修改已有触发器时，只能修改：
 - 绕过 `userInfo` 伪造“当前用户”
 - 用固定时区或固定组织代替上下文
 
-### 8.5 触发器里必须显式考虑递归风险
+### 11.5 触发器里必须显式考虑递归风险
 
 凡是触发器里再去更新当前对象、父对象、子对象、共享对象，都要先判断是否会再次触发相关逻辑。
 
 AI 不能默认“更新一下没事”。
 
-### 8.6 触发器里必须显式考虑幂等性
+### 11.6 触发器里必须显式考虑幂等性
 
 尤其是以下动作：
 
@@ -335,7 +289,7 @@ AI 不能默认“更新一下没事”。
 
 必须先判断是否已执行过，否则很容易重复生成、重复发送、重复推送。
 
-### 8.7 涉及时间必须优先使用 `TimeUtil`
+### 11.7 涉及时间必须优先使用 `TimeUtil`
 
 只要出现以下需求，AI 默认当成“有时区风险”处理：
 

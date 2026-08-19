@@ -1,77 +1,64 @@
-# CloudCC 简档 CLI 命令说明
+# CloudCC 简档 CLI 开发说明
 
-## 支持的命令
+## 读取契约
 
-| 操作 | 说明 |
-|------|------|
-| `create` | 创建自定义简档 |
-| `get` | 查询简档列表 |
-| `delete` | 删除自定义简档 |
+简档读取使用 MetadataService 专用端点：
 
-## CLI 命令详解
-
-### 创建简档
-
-```bash
-cloudcc create profile <path> <profileName> [description]
+```text
+GET /metadata/v1/profiles?filter=<text>
+GET /metadata/v1/profiles?selector=<id-or-name-or-apiName>
+GET /metadata/v1/profiles/{id}
 ```
 
-**参数说明：**
+- `filter` 对 ID、名称、API 名称和描述做不区分大小写的包含匹配。
+- `selector` 对 ID、名称和 API 名称做精确匹配，并返回全部精确匹配项。
+- CLI 的 detail/delete 必须检查结果数量为 1；数量为 0 或大于 1 时 fail closed。
+- `/metadata/v1/profiles/{id}` 只接受已经解析出的 ID，返回简档详情、用户引用计数和权限关联行计数。
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `path` | 是 | 项目路径，`.` 表示当前目录 |
-| `profileName` | 是 | 简档名称 |
-| `description` | 否 | 简档描述 |
-
-**示例：**
+## CLI 用法
 
 ```bash
-# 创建简档
-cloudcc create profile . "销售经理简档"
-
-# 创建带描述的简档
-cloudcc create profile . "销售代表简档" "适用于销售团队的权限配置"
+cloudcc get profile <projectPath> [filter]
+cloudcc detail profile <projectPath> <id|name|apiName>
+cloudcc create profile <projectPath> <specJson|@file>
+cloudcc update profile <projectPath> <specJson|@file>
+cloudcc delete profile <projectPath> <id|name|apiName>
+cloudcc apply msapi <projectPath> <planId>
 ```
 
-### 查询简档列表
+历史 URI 编码 JSON 查询仍可作为单参数传入；CLI 会从 `selector`、`id`、`profileId`、`apiName`、`profilename`、`profileName`、`name` 或 `filter` 中提取明确值。新脚本建议直接传普通文本参数。
+
+## 删除保护
+
+MetadataService 对 profiles delete 执行两阶段保护：
+
+1. 创建 plan 前验证目标 ID 存在、不是 `aaa000001`，且没有 `tp_sys_user.profile_id` 引用。
+2. apply 的数据库事务内锁定目标简档行和对应用户引用范围，再次验证；失败时 operation 标记为 `FAILED`，不执行任何删除 mutation。
+
+删除计划按以下顺序清理：
+
+1. `tp_sys_profile_infoset`
+2. `tp_sys_profile_field`
+3. `tp_sys_profile_layout`
+4. `tp_sys_multi_lang`
+5. `tp_sys_profile`
+
+不要绕开 CLI/MetadataService 直接拼接 SQL，也不要在重名情况下自动选择第一条记录。
+
+## 验证建议
 
 ```bash
-cloudcc get profile <projectPath> [encodedCondJson]
-```
-
-**参数说明：**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `projectPath` | 否 | 项目路径，默认当前目录 |
-| `encodedCondJson` | 否 | URI 编码后的查询条件 JSON |
-
-**示例：**
-
-```bash
-# 获取所有简档
+# 只读验证
 cloudcc get profile .
+cloudcc detail profile . <unique-id>
 
-# 带查询条件
-cloudcc get profile . '%7B%22type%22%3A%22custom%22%7D'
+# 计划验证；不要立即 apply
+cloudcc delete profile . <disposable-profile-id>
+
+# 在明确授权的可丢弃窗口执行后审计
+cloudcc apply msapi . <planId>
+cloudcc changes msapi . <operationId>
+cloudcc rollback-plan msapi . <operationId>
 ```
 
-### 删除简档
-
-```bash
-cloudcc delete profile <projectPath> <profileId>
-```
-
-**参数说明：**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `projectPath` | 否 | 项目路径，默认当前目录 |
-| `profileId` | 是 | 简档 ID |
-
-**示例：**
-
-```bash
-cloudcc delete profile . aaa202672F656B7VfEjL
-```
+真实租户写入必须使用可丢弃简档，并先确认没有用户引用。系统管理员简档只应验证“被拒绝”，不得尝试绕过保护。

@@ -21,6 +21,101 @@
 - 哪些做法必须避免
 - 修改类的时候，要将测试类也一起调整
 
+## 2. 自包含编译与发布链路
+
+CloudCC 自定义类不是普通 Maven 项目。技能已经把平台编译所需的 `cceg.jar`、cclib 和主要第三方依赖固化到 `assets/class-compiler/WEB-INF`，开发者不需要也不应获取 `setup-svc`、`main-svc` 或 CloudCC 平台源码。
+
+`cloudcc validate classes` 的本地链路是：
+
+1. 读取 SOURCE 标记内的 Java 源码。
+2. 用内置 `com.cloudcc.core.cls.fag.FagTemplate` 生成 `com.cloudcc.core.fag.CLOCAL` 包装源码。
+3. 用 JDK 21 和技能内置 classpath 编译；语法、SDK 类型、构造函数和策略错误会返回给调用方。
+
+`cloudcc publish classes` 的发布链路是：
+
+1. 先执行同 `cloudcc validate classes` 一致的本地 `FagTemplate` 编译验证。
+2. 本地验证通过后，调用目标 setup-svc 的 `POST /api/ccfag/validate`，让目标环境按真实租户依赖校验待保存源码。
+3. 远程 validate 通过后，才调用 class save/detail。
+4. 保存后按 ID 读回源码并比较 SHA-256；一致才报告 `published_and_verified`。
+
+目标平台内部如何路由到其部署服务不属于开发者依赖。技能不会读取服务源码、启动本地服务、探测本地端口或要求 main-svc binding。
+
+## 3. 独立开发与发布环境
+
+### 3.1 必需依赖
+
+| 依赖 | 要求 | 来源 |
+| --- | --- | --- |
+| JDK | JDK 21，`java` 与 `javac` 均可用 | `JAVA_HOME`、`CLOUDCC_JAVA_HOME` 或 `classDev.javaHome` |
+| 自包含编译器 | 30 个经过 SHA-256 清单校验的 `cceg.jar`、cclib 与编译依赖 | 技能包 `assets/class-compiler` |
+| 发布入口 | 目标 CloudCC 公共网关 | `CloudCCDev`/`baseUrl` 自动解析，或 `classPublishUrl` |
+| 发布认证 | 目标环境有效凭据 | 常规项目配置，或短期 `CLOUDCC_ACCESS_TOKEN` |
+
+不需要平台源码、本机 Maven 仓库、Node/npm、setup-svc/main-svc 进程、runtime URL 或 binding。
+
+### 3.2 项目配置
+
+在 `cloudcc-cli.config.json` 当前环境中配置：
+
+```json
+{
+  "use": "dev",
+  "dev": {
+    "safetyMark": "<mark>",
+    "CloudCCDev": "<CloudCC developer configuration>",
+    "classDev": {
+      "javaHome": "/absolute/path/to/jdk-21"
+    }
+  }
+}
+```
+
+认证信息优先通过进程环境变量注入，不要提交到项目：
+
+```bash
+export CLOUDCC_ACCESS_TOKEN='<temporary-token>'
+```
+
+私有部署如果标准配置不能推导目标网关，可在当前环境增加：
+
+```json
+"classPublishUrl": "https://example.cloudcc.cn/ccdomaingateway/setup"
+```
+
+### 3.3 初始化与环境诊断
+
+```bash
+cloudcc doctor classes <projectPath>
+```
+
+`doctor classes` 校验 JDK 21、内置 manifest、30 个 jar 的大小和 SHA-256，以及目标网关/认证配置。输出中的 `platformSourceRequired`、`setupSvcRequired`、`mainSvcRequired` 和 `mavenCacheRequired` 必须全部为 `false`。兼容命令 `prepare classes` 只做相同的只读校验，不再创建软链接或服务运行目录。
+
+### 3.4 一次完成的标准工作流
+
+```bash
+cloudcc create classes OrderService
+# 仅编辑 backend/classes/OrderService/OrderService.java 的 SOURCE 区域
+
+cloudcc validate classes OrderService <projectPath>
+cloudcc publish classes OrderService <projectPath>
+```
+
+- `validate` 使用技能内置的真实 `FagTemplate` 和依赖集编译，并把生成文件行号映射回 SOURCE 行号。
+- `publish` 会先本地验证当前源码，再调用目标 setup-svc `POST /api/ccfag/validate`，最后才 save；若使用 `--validation-evidence`，证据中的类名、通过状态和 SHA-256 必须与当前源码一致。
+- `publish` 失败时必须把本地编译诊断、远程 validate 的 `returnInfo`、`data.errors`、`data.warnings` 和原始 `responseBody` 返回给调用方，调用方应优先根据这些信息修正代码。
+- 本地没有 ID 时，`publish` 先按名称精确查找已有类，以便从中断恢复并避免重复创建；歧义时 fail closed。
+- 保存成功后按平台返回的 ID 调用 detail，比较读回源码 SHA-256，并把 ID 写入本地 `config.json`。
+
+此技能的交付边界是本地编译与目标环境发布/读回，不以本地 main-svc 运行测试为前置条件。业务功能验收应在目标租户的正常用户入口、集成测试或客户验收流程中完成。
+
+### 3.5 失败恢复原则
+
+- 编译失败：修正诊断对应的 SOURCE 行，禁止靠重复发布试错。
+- 保存响应丢失或 CLI 中断：重新执行 `publish`，它会先解析同名线上类 ID 后幂等更新。
+- 读回哈希不一致：停止运行测试，确认服务端保存内容与本地源码，不继续盲目重发。
+- 编译器完整性失败：重新安装对应版本技能包，禁止从本机服务目录或 Maven 缓存临时拼依赖。
+- 业务验收失败：类已经上线但目标未完成，应继续修正业务实现并重新 validate/publish，不能把“发布成功”当成需求完成。
+
 ## 4. classes 模块支持的 CLI 命令总览
 
 说明：
@@ -47,14 +142,27 @@ cloudcc create classes <name>
 命令：
 
 ```bash
-cloudcc publish classes <name>
+cloudcc publish classes <name> [projectPath] [--validation-evidence <file>]
 ```
 
 参数：
 
 | 参数   | 必填 | 类型     | 说明                          |
 | ------ | ---- | -------- | ----------------------------- |
-| `name` | 是   | `string` | 本地 `classes/<name>/` 目录名 |
+| `name` | 是   | `string` | 本地 `backend/classes/<name>/` 目录名 |
+| `projectPath` | 否 | `string` | 项目根目录；未传时使用当前工作目录 |
+| `--validation-evidence` | 否 | `string` | 复用同一源码 SHA-256 的本地验证证据；只跳过本地编译，不跳过远程 validate |
+
+发布顺序固定为：
+
+1. 本地编译验证，使用技能包内置 `FagTemplate` 和 classpath。
+2. 远程 validate，调用 `POST /api/ccfag/validate`。
+3. 保存，调用 `POST /api/ccfag/save`。
+4. 按 ID 读回并校验源码哈希。
+
+从 CLI/技能 `2.2.7` 开始，`publish classes` 要求目标 setup-svc 至少为 `19.3.R20`，因为旧版本 setup-svc 不提供 `/api/ccfag/validate`。
+
+`/api/ccfag/validate` 的实际入参类型是 `CCfagVo`，服务端实际读取并编译的是 `source`。CLI 发送的 `id`、`name`、`version`、`folderId` 是为了复用后续 save payload 和保留上下文；这些字段不参与 validate 编译判断。`source` 在远程 validate 和 save 中都会使用 URLDecoder-compatible 编码；源码中的字面量 `+` 会编码为 `%2B`，避免 Java URLDecoder 把加号解成空格。
 
 #### 3) 拉取自定义类（按本地名称）
 
@@ -68,7 +176,7 @@ cloudcc pull classes <name>
 
 | 参数   | 必填 | 类型     | 说明                                                                     |
 | ------ | ---- | -------- | ------------------------------------------------------------------------ |
-| `name` | 是   | `string` | 本地 `classes/<name>/` 目录名；会读取该目录 `config.json` 中的 `id` 拉取 |
+| `name` | 是   | `string` | 本地 `backend/classes/<name>/` 目录名；会读取该目录 `config.json` 中的 `id` 拉取 |
 
 #### 4) 查询自定义类列表（支持条件查询）
 
@@ -126,7 +234,7 @@ cloudcc pullList classes <id> <projectPath>
 | 参数          | 必填 | 类型     | 说明                                                 |
 | ------------- | ---- | -------- | ---------------------------------------------------- |
 | `id`          | 是   | `string` | 线上自定义类 ID                                      |
-| `projectPath` | 是   | `string` | 项目根目录；会写入到 `<projectPath>/classes/<name>/` |
+| `projectPath` | 是   | `string` | 项目根目录；会写入到 `<projectPath>/backend/classes/<name>/` |
 
 #### 7) 删除自定义类
 
@@ -140,7 +248,7 @@ cloudcc delete classes <nameOrId> [projectPath]
 
 | 参数          | 必填 | 类型     | 说明                                                                                                   |
 | ------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------ |
-| `nameOrId`    | 是   | `string` | 可传本地目录名或线上 ID；若本地 `classes/<nameOrId>/config.json` 存在且带 `id`，优先使用其中 `id` 删除 |
+| `nameOrId`    | 是   | `string` | 可传本地目录名或线上 ID；若本地 `backend/classes/<nameOrId>/config.json` 存在且带 `id`，优先使用其中 `id` 删除 |
 | `projectPath` | 否   | `string` | 项目根目录，默认当前目录                                                                               |
 
 #### 8) 文档命令
@@ -161,7 +269,7 @@ cloudcc doc platform/classes <introduction|devguide>
 
 ### 5.1 只能通过 cloudcc-cli 管理类目录
 
-AI 不得手工创建或复制 `classes/<类名>/` 目录，不得私自改动 `config.json` 中的
+AI 不得手工创建或复制 `backend/classes/<类名>/` 目录，不得私自改动 `config.json` 中的
 `id` 或版本信息。
 
 ### 5.2 只能在 SOURCE 区域内写业务代码
@@ -2745,7 +2853,7 @@ AI 写代码时必须假设以下事情都可能失败：
 
 AI 不得：
 
-- 手工新建 `classes/<类名>/` 目录
+- 手工新建 `backend/classes/<类名>/` 目录
 - 修改 `config.json` 的 `id` 或版本字段
 - 在 SOURCE 区域外写业务代码
 - 默认使用 `new Date()` 作为业务时间
@@ -2764,7 +2872,7 @@ AI 不得：
 1. 这是页面/按钮/触发器/定时类/组件中的哪一种入口
 2. 这段逻辑是否真的应该放到自定义类
 3. 会影响哪些对象
-4. 是否需要外部系统调用
+3. 是否需要外部系统调用
 5. 是否需要附件或文件处理
 6. 是否涉及时区
 7. 是否涉及权限、共享或审批
@@ -2777,7 +2885,7 @@ AI 完成代码后，必须自检：
 1. 是否只修改了 SOURCE 区域
 2. 是否保留了 `UserInfo` + `CCService`
 3. 是否正确使用对象/字段 API 名称
-4. 是否按场景选择了查询 API（内部无权限用 `cquery` / `cqueryByFields`
+3. 是否按场景选择了查询 API（内部无权限用 `cquery` / `cqueryByFields`
    等，对外或需数据权限用 `cqueryWithRoleRight`；复杂联查用 `cqlQuery`，分页用
    `pagedQuery` / `pageQuery` 等）
 5. 是否对写操作做了失败处理

@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 )
 
 func ParseEncodedObject(encoded string, label string) (map[string]any, error) {
 	if encoded == "" {
 		return nil, fmt.Errorf("%s: encodedBodyJson is required", label)
+	}
+	encoded = strings.TrimSpace(encoded)
+	if strings.HasPrefix(encoded, "@") {
+		return ReadObjectFile(strings.TrimPrefix(encoded, "@"))
 	}
 	decoded, err := url.PathUnescape(encoded)
 	if err != nil {

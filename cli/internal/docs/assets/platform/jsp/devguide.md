@@ -51,13 +51,13 @@ cloudcc doc platform/jsp devguide
 ### 3.2 分析 JSP（不写文件）
 
 ```bash
-cloudcc analyze jsp "$(node -e 'console.log(encodeURI(JSON.stringify({jspPath:\"customize/wt_ly.jsp\",projectPath:process.cwd()})))')"
+cloudcc analyze jsp '{"jspPath":"customize/wt_ly.jsp","projectPath":"."}'
 ```
 
 ### 3.3 生成迁移结果
 
 ```bash
-cloudcc split jsp "$(node -e 'console.log(encodeURI(JSON.stringify({jspPath:\"customize/wt_ly.jsp\",projectPath:process.cwd(),overwrite:false})))')"
+cloudcc split jsp '{"jspPath":"customize/wt_ly.jsp","projectPath":".","overwrite":false}'
 ```
 
 ## 4. 输出结果

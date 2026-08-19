@@ -59,20 +59,15 @@ cloudcc upsert openapi [projectPath] <encodedBodyJson>
 示例：
 
 ```bash
-QUERY_BODY=$(node -e 'console.log(encodeURI(JSON.stringify({ objectApiName: "Account", expressions: "", fields: "id,name" })))')
-cloudcc query openapi . "$QUERY_BODY"
+cloudcc query openapi . '{"objectApiName":"Account","expressions":"","fields":"id,name"}'
 
-PAGE_QUERY_BODY=$(node -e 'console.log(encodeURI(JSON.stringify({ objectApiName: "Account", fields: "id,name", expressions: "", pageNUM: 1, pageSize: 20 })))')
-cloudcc pageQuery openapi . "$PAGE_QUERY_BODY"
+cloudcc pageQuery openapi . '{"objectApiName":"Account","fields":"id,name","expressions":"","pageNUM":1,"pageSize":20}'
 
-CREATE_BODY=$(node -e 'console.log(encodeURI(JSON.stringify({ objectApiName: "Account", data: [{ name: "demo account" }] })))')
-cloudcc create openapi . "$CREATE_BODY"
+cloudcc create openapi . '{"objectApiName":"Account","data":[{"name":"demo account"}]}'
 
-UPDATE_BODY=$(node -e 'console.log(encodeURI(JSON.stringify({ objectApiName: "Account", data: [{ id: "001xxxxxxxxxxxx", name: "demo account 2" }] })))')
-cloudcc update openapi . "$UPDATE_BODY"
+cloudcc update openapi . '{"objectApiName":"Account","data":[{"id":"001xxxxxxxxxxxx","name":"demo account 2"}]}'
 
-DELETE_BODY=$(node -e 'console.log(encodeURI(JSON.stringify({ objectApiName: "Account", data: [{ id: "001xxxxxxxxxxxx" }] })))')
-cloudcc delete openapi . "$DELETE_BODY"
+cloudcc delete openapi . '{"objectApiName":"Account","data":[{"id":"001xxxxxxxxxxxx"}]}'
 ```
 
 说明：

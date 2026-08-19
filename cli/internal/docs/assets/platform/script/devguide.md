@@ -171,36 +171,36 @@ cloudcc delete script <objName/scriptName> <projectPath>
 ### 查询客户端脚本列表（默认条件）
 
 ```bash
-cloudcc get script "$(node -e "console.log(encodeURI(JSON.stringify({pageSize:50,pageNo:1,condition:{scriptName:'',pageLabel:'',objName:''}})))")" .
+cloudcc get script '{"pageSize":50,"pageNo":1,"condition":{"scriptName":"","pageLabel":"","objName":""}}' .
 ```
 
 ### 按脚本名筛选（例如：test）
 
 ```bash
-cloudcc get script "$(node -e "console.log(encodeURI(JSON.stringify({pageSize:50,pageNo:1,condition:{scriptName:'test',pageLabel:'',objName:''}})))")" .
+cloudcc get script '{"pageSize":50,"pageNo":1,"condition":{"scriptName":"test","pageLabel":"","objName":""}}' .
 ```
 
 ### 按对象名称筛选（示例：`客户` / `客户004`）
 
 ```bash
 # 对象名称为“客户”
-cloudcc get script "$(node -e "console.log(encodeURI(JSON.stringify({pageSize:50,pageNo:1,condition:{scriptName:'',pageLabel:'',objName:'客户'}})))")" .
+cloudcc get script '{"pageSize":50,"pageNo":1,"condition":{"scriptName":"","pageLabel":"","objName":"客户"}}' .
 
 # 对象名称为“客户004”
-cloudcc get script "$(node -e "console.log(encodeURI(JSON.stringify({pageSize:50,pageNo:1,condition:{scriptName:'',pageLabel:'',objName:'客户004'}})))")" .
+cloudcc get script '{"pageSize":50,"pageNo":1,"condition":{"scriptName":"","pageLabel":"","objName":"客户004"}}' .
 ```
 
 错误示例（不要这样传）：
 
 ```bash
 # 业务上说“客户”，就不要自作主张写成 account
-cloudcc get script "$(node -e "console.log(encodeURI(JSON.stringify({pageSize:50,pageNo:1,condition:{scriptName:'',pageLabel:'',objName:'account'}})))")" .
+cloudcc get script '{"pageSize":50,"pageNo":1,"condition":{"scriptName":"","pageLabel":"","objName":"account"}}' .
 ```
 
 ### 新建脚本（本地）
 
 ```bash
-cloudcc create script "$(node -e "console.log(encodeURI(JSON.stringify({objName:'contact',scriptName:'hello_script'})))")"
+cloudcc create script '{"objName":"contact","scriptName":"hello_script"}'
 ```
 
 ### 发布脚本（上线）

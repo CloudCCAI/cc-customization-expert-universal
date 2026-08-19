@@ -296,17 +296,61 @@ func readCache(projectPath string) (map[string]any, error) {
 	return jsonx.ReadObjectFile(file)
 }
 
-func writeCacheEntry(projectPath string, cfg Config) error {
-	key := stringValue(cfg["safetyMark"])
-	if key == "" {
-		key = stringValue(cfg["secretKey"])
+func ClearCacheEntry(projectPath string) error {
+	key, err := activeCacheKey(projectPath)
+	if err != nil {
+		return err
 	}
+	file := filepath.Join(projectPath, ".cloudcc-cache.json")
+	if key == "" {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	cache, err := readCache(projectPath)
+	if err != nil {
+		return err
+	}
+	delete(cache, key)
+	if len(cache) == 0 {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return jsonx.WriteObjectFile(file, cache)
+}
+
+func writeCacheEntry(projectPath string, cfg Config) error {
+	key := cacheKey(cfg)
 	if key == "" {
 		return nil
 	}
 	cache, _ := readCache(projectPath)
 	cache[key] = map[string]any(cfg)
 	return jsonx.WriteObjectFile(filepath.Join(projectPath, ".cloudcc-cache.json"), cache)
+}
+
+func activeCacheKey(projectPath string) (string, error) {
+	root, err := Root(projectPath)
+	if err != nil {
+		return "", err
+	}
+	use, _ := root["use"].(string)
+	active, _ := root[use].(map[string]any)
+	if active == nil {
+		return "", nil
+	}
+	return cacheKey(Config(active)), nil
+}
+
+func cacheKey(cfg Config) string {
+	key := stringValue(cfg["safetyMark"])
+	if key == "" {
+		key = stringValue(cfg["secretKey"])
+	}
+	return key
 }
 
 func baseURL(cfg Config) string {

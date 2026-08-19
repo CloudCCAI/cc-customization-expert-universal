@@ -1,10 +1,16 @@
-{
-  "packageName": "cc-customization-expert-universal",
-  "version": "2.0.4",
-  "releaseDate": "2026-06-10",
-  "compatCloudccCliVersion": "2.5.3",
-  "runtime": "go",
-  "scope": "P0-P3 + P4-project-template-pagecomponent-hybrid-publish",
-  "canonicalComponentResource": "pagecomponent",
-  "deferred": ["pure-go-vue-build", "jsp-migration", "full-mcp-tools"]
+﻿{
+    "packageName":  "cc-customization-expert-universal",
+    "version":  "2.2.9-universal",
+    "releaseDate":  "2026-08-14",
+    "compatCloudccCliVersion":  "2.5.3",
+    "runtime":  "go",
+    "execution":  {
+                      "defaultMode":  "auto",
+                      "strictMode":  "",
+                      "env":  "CLOUDCC_EXECUTION_MODE",
+                      "projectConfigKeys":  [
+                                                "executionMode",
+                                                "execution_mode"
+                                            ]
+                  }
 }

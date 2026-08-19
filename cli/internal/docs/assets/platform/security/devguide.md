@@ -37,6 +37,8 @@
 - 是否按区域、公用小组、队列共享
 - 是否按记录字段条件共享
 
+角色和共享规则应作为数据权限主线实施：`role` 定义组织层级和上下级可见性，`sharingRule` 定义角色层级之外的共享例外。
+
 ### 4. 再定义字段级安全
 
 敏感字段先通过字段级安全控制可见和只读，不要只依赖页面布局隐藏。
@@ -64,6 +66,19 @@ cloudcc doc platform/singleSignOn devguide
 - 字段级安全用于敏感字段，不要只用页面隐藏。
 - 共享规则只扩展访问，不应当替代组织角色模型。
 - 上线前必须用目标用户账号做应用、菜单、对象、字段、记录五层验收。
+
+## MSAPI 实施域
+
+除高代码外，权限相关低代码元数据应进入 MSAPI：
+
+```bash
+cloudcc plan msapi roles @role.json
+cloudcc plan msapi profiles @profile.json
+cloudcc plan msapi permissions @permission.json
+cloudcc plan msapi sharing-rules @sharing-rule.json
+```
+
+写入后保留 `planId`、`operationId`，并使用 `changes`、`rollback-plan`、`rollback` 形成可审计证据。
 
 ## 验收清单
 

@@ -1,17 +1,14 @@
 package modules
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"cloudcc-customization-expert-go/internal/config"
 	"cloudcc-customization-expert-go/internal/httpclient"
@@ -48,6 +45,10 @@ func handlePageComponent(action string, resource string, args []string, stdout i
 	switch action {
 	case "create":
 		return pageComponentCreate(args, stderr, cwd)
+	case "package":
+		return pageComponentPackage(args, stdout, cwd)
+	case "bind":
+		return pageComponentBind(args, stdout, cwd)
 	case "publish":
 		return pageComponentPublish(args, stdout, stderr, cwd)
 	case "get":
@@ -163,21 +164,14 @@ func pageComponentPublish(args []string, stdout io.Writer, stderr io.Writer, cwd
 	if err != nil {
 		return err
 	}
-	tempName := "pagecomponentTemp"
-	tempPath := filepath.Join(projectPath, filepath.FromSlash(pageComponentRootDir), tempName+".js")
-	if err := writePageComponentTempEntry(tempPath, name+"/"+name+".vue", pub, cfg, localConfig); err != nil {
-		return err
+	jsPath, checked := pageComponentPrebuiltBundlePath(projectPath, name, pub, localConfig, cfg)
+	if jsPath == "" {
+		return fmt.Errorf("pagecomponent publish requires a prebuilt UMD bundle; checked %s. Build the bundle outside the Go skill runtime, or set bundlePath/prebuiltBundlePath in frontend/pagecomponents/%s/config.json. The Go CLI does not invoke Node/npm", strings.Join(checked, ", "), name)
 	}
-	defer os.Remove(tempPath)
-
-	fmt.Fprintln(stderr, "Compiling pagecomponent with local vue-cli-service, please wait...")
-	if err := runVueCLIServiceBuild(pageComponentFrontendDir(projectPath), tempName, pub.Component, stderr); err != nil {
-		return err
-	}
-	jsPath := filepath.Join(pageComponentFrontendDir(projectPath), "build", pub.Component+".umd.min.js")
+	fmt.Fprintf(stderr, "Publishing prebuilt pagecomponent bundle: %s\n", jsPath)
 	jsContent, err := os.ReadFile(jsPath)
 	if err != nil {
-		return fmt.Errorf("cannot read built component JS %s: %w", jsPath, err)
+		return fmt.Errorf("cannot read prebuilt pagecomponent JS %s: %w", jsPath, err)
 	}
 	header := map[string]any{
 		"accessToken": pageComponentAccessToken(cfg),
@@ -214,7 +208,247 @@ func pageComponentPublish(args []string, stdout io.Writer, stderr io.Writer, cwd
 			_ = jsonx.WriteObjectFile(localConfigPath, localConfig)
 		}
 	}
+	publishedID := firstNonBlankString(returnedPageComponentID(res), pageComponentConfigID(projectPath, localConfig))
+	if refs, err := pageComponentCustomPageReferenceHints(projectPath, pub.Component, publishedID); err == nil {
+		res["customPageReferences"] = refs
+	} else {
+		res["customPageReferenceCheckError"] = err.Error()
+	}
 	return printJSON(stdout, res)
+}
+
+func pageComponentPackage(args []string, stdout io.Writer, cwd string) error {
+	if len(args) < 1 || strings.TrimSpace(args[0]) == "" {
+		return fmt.Errorf("cloudcc package pagecomponent <name> [projectPath] --dry-run")
+	}
+	name := strings.TrimSpace(args[0])
+	projectPath := cwd
+	if len(args) > 1 && strings.TrimSpace(args[1]) != "" && !strings.HasPrefix(args[1], "--") {
+		projectPath = args[1]
+	}
+	projectPath, _ = filepath.Abs(projectPath)
+	localConfigPath := filepath.Join(pageComponentDir(projectPath, name), "config.json")
+	localConfig, err := jsonx.ReadObjectFile(localConfigPath)
+	if err != nil {
+		return fmt.Errorf("cannot read pagecomponent config: %w", err)
+	}
+	pub, err := readPageComponentPublishData(projectPath, name, localConfig, map[string]any{})
+	if err != nil {
+		return err
+	}
+	bundlePath, checked := pageComponentPrebuiltBundlePath(projectPath, name, pub, localConfig, map[string]any{})
+	files := make([]string, 0, len(pub.Dependencies)+1)
+	for key := range pub.Dependencies {
+		files = append(files, key)
+	}
+	files = append(files, filepath.ToSlash(filepath.Join(pageComponentRootDir, name, "config.json")))
+	sort.Strings(files)
+	return printJSON(stdout, map[string]any{
+		"mode":              "pagecomponent-package-dry-run",
+		"name":              name,
+		"component":         pub.Component,
+		"projectPath":       projectPath,
+		"files":             files,
+		"bundlePath":        slashRelOrAbs(projectPath, bundlePath),
+		"checkedBundlePath": slashRelList(projectPath, checked),
+		"safeDependencyPolicy": map[string]any{
+			"include": []string{filepath.ToSlash(filepath.Join(pageComponentRootDir, name))},
+			"exclude": []string{"cloudcc-cli.config.json", ".env", "token cache", ".claw-local"},
+		},
+	})
+}
+
+func pageComponentBind(args []string, stdout io.Writer, cwd string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("cloudcc bind pagecomponent <projectPath> <pageApi> <componentIdOrName> [--embedded true|false] [--workspace-url <url>] [--dry-run]")
+	}
+	projectPath := args[0]
+	pageAPI := args[1]
+	componentInput := args[2]
+	options := parsePageComponentBindOptions(args[3:])
+	page, err := customPageDetailData(projectPath, pageAPI)
+	if err != nil {
+		return err
+	}
+	component, err := resolvePageComponentForBind(projectPath, componentInput)
+	if err != nil {
+		return err
+	}
+	componentID := strings.TrimSpace(fmt.Sprint(component["id"]))
+	componentName := strings.TrimSpace(fmt.Sprint(firstAny(component["compUniName"], component["component"], component["name"])))
+	if componentID == "" || componentID == "<nil>" {
+		return fmt.Errorf("target pagecomponent id is required")
+	}
+	if componentName == "" || componentName == "<nil>" {
+		return fmt.Errorf("target pagecomponent compUniName is required")
+	}
+	previousRefs := customPageComponentRefs(page)
+	content := customPageObjectList(page["pageContent"])
+	if len(content) == 0 {
+		content = []map[string]any{{"name": componentName}}
+	}
+	targetIndex := 0
+	for i, item := range content {
+		name := strings.TrimSpace(fmt.Sprint(firstAny(item["name"], item["component"], item["compUniName"])))
+		if name == componentName {
+			targetIndex = i
+			break
+		}
+	}
+	item := content[targetIndex]
+	item["name"] = componentName
+	item["comId"] = componentID
+	if options.embeddedSet {
+		item["embedded"] = options.embedded
+	}
+	propObj, _ := item["propObj"].(map[string]any)
+	if propObj == nil {
+		propObj = map[string]any{}
+	}
+	if options.workspaceURL != "" {
+		propObj["workspaceUrl"] = options.workspaceURL
+	}
+	item["propObj"] = propObj
+	componentInfo, _ := item["componentInfo"].(map[string]any)
+	if componentInfo == nil {
+		componentInfo = map[string]any{}
+	}
+	componentInfo["id"] = componentID
+	componentInfo["component"] = componentName
+	componentInfo["loadModel"] = firstAny(component["loadModel"], componentInfo["loadModel"], "lazy")
+	item["componentInfo"] = componentInfo
+	content[targetIndex] = item
+
+	payload := map[string]any{}
+	for _, key := range []string{"id", "pageLabel", "pageApi", "orgId", "renderVersion", "canvasStyleData", "isTemplate"} {
+		if v := page[key]; v != nil {
+			payload[key] = v
+		}
+	}
+	payload["pageApi"] = firstAny(page["pageApi"], pageAPI)
+	payload["pageContent"] = mapsToAnyList(content)
+	payload["compList"] = []any{map[string]any{"id": componentID, "compUniName": componentName}}
+	if err := validateCustomPagePayload(payload); err != nil {
+		return err
+	}
+	if options.dryRun {
+		return printJSON(stdout, map[string]any{
+			"status":  "dry_run",
+			"pageApi": pageAPI,
+			"previous": map[string]any{
+				"componentRefs": previousRefs,
+			},
+			"proposed": map[string]any{
+				"componentId":   componentID,
+				"componentName": componentName,
+				"payload":       payload,
+			},
+		})
+	}
+	cfg, err := config.Load(projectPath)
+	if err != nil {
+		return err
+	}
+	var res map[string]any
+	if err := customPageSavePost(cfg, payload, &res); err != nil {
+		return err
+	}
+	if err := requireCloudCCSuccess(res, "Bind PageComponent Failed"); err != nil {
+		return err
+	}
+	current := map[string]any{}
+	if data, err := customPageDetailData(projectPath, pageAPI); err == nil {
+		current = customPageSummary(data)
+	}
+	return printJSON(stdout, map[string]any{
+		"status":  "updated",
+		"pageApi": pageAPI,
+		"previous": map[string]any{
+			"componentRefs": previousRefs,
+		},
+		"current": map[string]any{
+			"componentId":   componentID,
+			"componentName": componentName,
+			"detail":        current,
+		},
+		"response": res,
+	})
+}
+
+func pageComponentCustomPageReferenceHints(projectPath string, componentName string, componentID string) ([]map[string]any, error) {
+	cfg, err := config.Load(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	var listRes map[string]any
+	body := map[string]any{
+		"pageNo":   1,
+		"pageSize": 2000,
+		"condition": map[string]any{
+			"pageLabel": "",
+			"pageApi":   "",
+		},
+	}
+	if err := customPagePost(cfg, "/custom/pc/1.0/post/pageCustomPage", body, &listRes); err != nil {
+		return nil, err
+	}
+	if err := requireCloudCCSuccess(listRes, "Check CustomPage References Failed"); err != nil {
+		return nil, err
+	}
+	pages := responseList(listRes)
+	hints := make([]map[string]any, 0)
+	for _, page := range pages {
+		pageAPI := strings.TrimSpace(fmt.Sprint(firstAny(page["pageApi"], page["apiName"], page["apiname"])))
+		if pageAPI == "" || pageAPI == "<nil>" {
+			continue
+		}
+		detail, err := customPageDetailData(projectPath, pageAPI)
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range customPageComponentRefs(detail) {
+			refName := strings.TrimSpace(fmt.Sprint(ref["name"]))
+			if componentName != "" && refName != componentName {
+				continue
+			}
+			refID := strings.TrimSpace(fmt.Sprint(ref["comId"]))
+			status := "same_component_latest_version"
+			if componentID == "" || componentID == "<nil>" {
+				status = "referenced_component_unknown"
+			} else if refID != componentID {
+				status = "stale_component_reference"
+			}
+			hints = append(hints, map[string]any{
+				"status":               status,
+				"pageApi":              firstAny(detail["pageApi"], pageAPI),
+				"pageLabel":            firstAny(detail["pageLabel"], detail["label"], detail["name"]),
+				"customPageId":         firstAny(detail["id"], detail["customPageId"]),
+				"componentName":        refName,
+				"currentComponentId":   refID,
+				"publishedComponentId": componentID,
+				"embedded":             firstAny(ref["embedded"], false),
+				"workspaceUrl":         firstAny(ref["workspaceUrl"], ""),
+			})
+		}
+	}
+	if len(hints) == 0 {
+		hints = append(hints, map[string]any{
+			"status":               "not_referenced",
+			"componentName":        componentName,
+			"publishedComponentId": componentID,
+		})
+	}
+	return hints, nil
+}
+
+func firstNonBlankString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && value != "<nil>" {
+			return value
+		}
+	}
+	return ""
 }
 
 func pageComponentGet(args []string, stdout io.Writer, cwd string) error {
@@ -471,12 +705,7 @@ func readPageComponentPublishData(projectPath string, name string, localConfig m
 	component := strings.TrimSpace(fmt.Sprint(firstAny(componentInfo["component"], localConfig["component"], "component-"+name)))
 	compName := strings.TrimSpace(fmt.Sprint(firstAny(componentInfo["compName"], localConfig["compName"], name)))
 	deps := collectPageComponentDependencies(entry, projectPath)
-	for _, cfgFile := range []string{"cloudcc-cli.config.json", "frontend/package.json", "frontend/vue.config.js", "frontend/babel.config.js"} {
-		file := filepath.Join(projectPath, cfgFile)
-		if b, err := os.ReadFile(file); err == nil {
-			deps[cfgFile] = string(b)
-		}
-	}
+	deps = safePageComponentDependencies(projectPath, name, deps)
 	buildVersion := strings.TrimSpace(fmt.Sprint(firstAny(componentInfo["buildVersion"], localConfig["buildVersion"], cfg["buildVersion"], "v1")))
 	return pageComponentPublishData{
 		Name:          name,
@@ -494,54 +723,174 @@ func readPageComponentPublishData(projectPath string, name string, localConfig m
 	}, nil
 }
 
-func writePageComponentTempEntry(tempPath string, buildFileName string, pub pageComponentPublishData, cfg config.Config, localConfig map[string]any) error {
-	destroyTimeout := firstAny(localConfig["destroyTimeout"], cfg["destroyTimeout"], 20*60*1000)
-	var content string
-	if pub.BuildVersion == "v2" {
-		content = fmt.Sprintf(`import index from "./%s"
-function install(Vue) {
-  Vue.component("%s", index);
-}
-export default install;
-if (typeof window !== "undefined" && window.Vue) {
-  window.Vue.use(install);
-  if (install.installed) {
-    install.installed = false;
-  }
-}
-`, buildFileName, pub.Component)
-	} else {
-		content = fmt.Sprintf(`import Vue from "vue"
-import VueCustomElement from "vue-custom-element"
-Vue.use(VueCustomElement);
-
-import index from "./%s"
-Vue.customElement("%s", index, { destroyTimeout: %v });
-`, buildFileName, pub.Component, destroyTimeout)
-	}
-	if err := os.MkdirAll(filepath.Dir(tempPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(tempPath, []byte(content), 0644)
+type pageComponentBindOptions struct {
+	embeddedSet  bool
+	embedded     bool
+	workspaceURL string
+	dryRun       bool
 }
 
-func runVueCLIServiceBuild(frontendPath string, tempName string, component string, stderr io.Writer) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "npx", "vue-cli-service", "build", "--target", "lib", "--name", component, "--dest", "build", "pagecomponents/"+tempName+".js")
-	cmd.Dir = frontendPath
-	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Fprintln(stderr, strings.TrimRight(string(output), "\r\n"))
+func parsePageComponentBindOptions(args []string) pageComponentBindOptions {
+	opts := pageComponentBindOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--embedded":
+			if i+1 < len(args) {
+				opts.embeddedSet = true
+				opts.embedded = strings.EqualFold(args[i+1], "true") || args[i+1] == "1"
+				i++
+			}
+		case "--workspace-url":
+			if i+1 < len(args) {
+				opts.workspaceURL = args[i+1]
+				i++
+			}
+		case "--dry-run":
+			opts.dryRun = true
+		}
 	}
-	if ctx.Err() == context.DeadlineExceeded {
-		return fmt.Errorf("vue-cli-service build timed out")
+	return opts
+}
+
+func resolvePageComponentForBind(projectPath string, input string) (map[string]any, error) {
+	if strings.HasPrefix(strings.TrimSpace(input), "component-") {
+		if data, err := pageComponentDetailFromList(projectPath, input); err == nil {
+			return data, nil
+		}
 	}
+	if data, err := pageComponentDetailByID(projectPath, input); err == nil {
+		return data, nil
+	}
+	return pageComponentDetailFromList(projectPath, input)
+}
+
+func pageComponentDetailFromList(projectPath string, input string) (map[string]any, error) {
+	list, err := pageComponentList(projectPath, input)
 	if err != nil {
-		return fmt.Errorf("vue-cli-service build failed: %w", err)
+		return nil, err
 	}
-	fmt.Fprintln(stderr, "Compilation Successful!")
-	return nil
+	for _, item := range list {
+		if fmt.Sprint(item["id"]) == input || fmt.Sprint(item["component"]) == input || fmt.Sprint(item["name"]) == input {
+			id := strings.TrimSpace(fmt.Sprint(item["id"]))
+			if id == "" || id == "<nil>" {
+				break
+			}
+			return pageComponentDetailByID(projectPath, id)
+		}
+	}
+	return nil, fmt.Errorf("pagecomponent %q not found", input)
+}
+
+func mapsToAnyList(items []map[string]any) []any {
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, item)
+	}
+	return out
+}
+
+func safePageComponentDependencies(projectPath string, name string, deps map[string]string) map[string]string {
+	out := map[string]string{}
+	prefix := filepath.ToSlash(filepath.Join(pageComponentRootDir, name)) + "/"
+	for key, value := range deps {
+		normalized := filepath.ToSlash(strings.TrimPrefix(key, "./"))
+		if !strings.HasPrefix(normalized, prefix) {
+			continue
+		}
+		if isUnsafePageComponentDependency(normalized) {
+			continue
+		}
+		out[normalized] = value
+	}
+	return out
+}
+
+func isUnsafePageComponentDependency(path string) bool {
+	base := strings.ToLower(filepath.Base(filepath.ToSlash(path)))
+	if base == "cloudcc-cli.config.json" || base == "cloudcc-cli.config.js" || base == ".env" || strings.HasSuffix(base, ".env") {
+		return true
+	}
+	if strings.Contains(strings.ToLower(path), "token") || strings.Contains(strings.ToLower(path), "secret") {
+		return true
+	}
+	return false
+}
+
+func slashRelOrAbs(base string, path string) string {
+	if path == "" {
+		return ""
+	}
+	if rel, err := filepath.Rel(base, path); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.ToSlash(path)
+}
+
+func slashRelList(base string, paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		out = append(out, slashRelOrAbs(base, path))
+	}
+	return out
+}
+
+func pageComponentPrebuiltBundlePath(projectPath string, name string, pub pageComponentPublishData, localConfig map[string]any, cfg config.Config) (string, []string) {
+	candidates := pageComponentPrebuiltBundleCandidates(projectPath, name, pub, localConfig, cfg)
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, candidates
+		}
+	}
+	return "", candidates
+}
+
+func pageComponentPrebuiltBundleCandidates(projectPath string, name string, pub pageComponentPublishData, localConfig map[string]any, cfg config.Config) []string {
+	rawValues := []any{
+		localConfig["bundlePath"],
+		localConfig["prebuiltBundlePath"],
+		localConfig["prebuiltBundle"],
+		localConfig["jsBundlePath"],
+		cfg["pagecomponentBundlePath"],
+		cfg["prebuiltBundlePath"],
+	}
+	componentDir := pageComponentDir(projectPath, name)
+	candidates := []string{}
+	seen := map[string]bool{}
+	addCandidate := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" || path == "<nil>" {
+			return
+		}
+		if !filepath.IsAbs(path) {
+			for _, base := range []string{projectPath, componentDir} {
+				abs := filepath.Clean(filepath.Join(base, filepath.FromSlash(path)))
+				if !seen[abs] {
+					seen[abs] = true
+					candidates = append(candidates, abs)
+				}
+			}
+			return
+		}
+		abs := filepath.Clean(path)
+		if !seen[abs] {
+			seen[abs] = true
+			candidates = append(candidates, abs)
+		}
+	}
+	for _, raw := range rawValues {
+		addCandidate(fmt.Sprint(raw))
+	}
+	for _, path := range []string{
+		filepath.Join(pageComponentFrontendDir(projectPath), "build", pub.Component+".umd.min.js"),
+		filepath.Join(pageComponentFrontendDir(projectPath), "build", pub.Component+".umd.js"),
+		filepath.Join(componentDir, "build", pub.Component+".umd.min.js"),
+		filepath.Join(componentDir, "build", pub.Component+".umd.js"),
+		filepath.Join(componentDir, "build", name+".umd.min.js"),
+		filepath.Join(componentDir, "build", name+".umd.js"),
+	} {
+		addCandidate(path)
+	}
+	return candidates
 }
 
 func pageComponentDetailByID(projectPath string, pageComponentID string) (map[string]any, error) {

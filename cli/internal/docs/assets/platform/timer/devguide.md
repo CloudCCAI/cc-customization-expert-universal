@@ -133,7 +133,7 @@ cloudcc create timer DailySyncJob true
 命令：
 
 ```bash
-cloudcc publish timer <name>
+cloudcc publish timer <name> [projectPath]
 ```
 
 参数：
@@ -141,12 +141,22 @@ cloudcc publish timer <name>
 | 参数   | 必填 | 类型     | 说明                           |
 | ------ | ---- | -------- | ------------------------------ |
 | `name` | 是   | `string` | 本地 `schedule/<name>/` 目录名 |
+| `projectPath` | 否 | `string` | 项目根目录；未传时使用当前工作目录 |
 
 示例：
 
 ```bash
-cloudcc publish timer DailySyncJob
+cloudcc publish timer DailySyncJob <projectPath>
 ```
+
+发布顺序固定为：
+
+1. 远程 validate，调用 `POST /api/ccPeak/validate`。
+2. 保存，调用 `POST /api/ccPeak/save`。
+
+从 CLI/技能 `2.2.7` 开始，`publish timer` 要求目标 setup-svc 至少为 `19.3.R20`，因为旧版本 setup-svc 不提供 `/api/ccPeak/validate`。
+
+`/api/ccPeak/validate` 的实际入参类型也是 `CCfagVo`，服务端实际读取并编译的是 `source`，编译入口固定为 `PeakFunctionImpl`。CLI 发送的 `id`、`name`、`version`、`folderId` 是为了复用后续 save payload 和保留上下文；这些字段不参与 validate 编译判断。`source` 在远程 validate 和 save 中都会使用 URLDecoder-compatible 编码；源码中的字面量 `+` 会编码为 `%2B`。远程 validate 失败时，CLI 必须返回 setup-svc 的 `returnInfo`、`data.errors`、`data.warnings` 和原始 `responseBody`，并且不能继续 save。
 
 ---
 
@@ -201,7 +211,7 @@ cloudcc get timer [listQueryJson] [projectPath]
 示例：
 
 ```bash
-cloudcc get timer "$(node -e 'console.log(encodeURI(JSON.stringify({shownum:2000,showpage:1,fid:\"\",sname:\"Daily\",rptcond:\"\",rptorder:\"\"})))')"
+cloudcc get timer '{"shownum":2000,"showpage":1,"fid":"","sname":"Daily","rptcond":"","rptorder":""}'
 ```
 
 ---

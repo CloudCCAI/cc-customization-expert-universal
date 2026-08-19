@@ -15,6 +15,14 @@
 - 删除作业：`delete`
 - 文档查看：`doc`
 
+setup-svc 的真实资源名是 `schedulAbleprg`，不是 `scheduleJob`。CLI 路由如下：
+
+- `get`：`/api/schedulAbleprg/list`
+- `detail`：`/api/schedulAbleprg/edit`
+- `create` / `update`：`/api/schedulAbleprg/save`
+- `delete`：`/api/schedulAbleprg/delete`
+- `getList`：`/api/lookup/getLookupData`，默认 `prefix=ccp`
+
 ---
 
 ## 二、CLI 命令说明
@@ -102,20 +110,7 @@ cloudcc getList scheduleJob "/path/to/project"
 2. 再创建定时作业
 
 ```bash
-cloudcc create scheduleJob "/path/to/project" "$(node -e 'console.log(encodeURI(JSON.stringify({
-  id: "",
-  name: "daily-10am-job",
-  prgid: "ccp202689F3015BpWah8",
-  frequency: "weekly",
-  weeks: "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
-  monthtype: "",
-  days: "",
-  weeknum: "",
-  mweek: "",
-  startdate: "2026-04-16",
-  enddate: "2037-12-31",
-  executetime: "10"
-})))')"
+cloudcc create scheduleJob "/path/to/project" '{"id":"","name":"daily-10am-job","prgid":"ccp202689F3015BpWah8","frequency":"weekly","weeks":"Mon,Tue,Wed,Thu,Fri,Sat,Sun","monthtype":"","days":"","weeknum":"","mweek":"","startdate":"2026-04-16","enddate":"2037-12-31","executetime":"10"}'
 ```
 
 3. 创建后查询结果

@@ -21,12 +21,7 @@ type projectFile struct {
 var projectFiles = []projectFile{
 	{asset: "assets/cloudcc-cli.config.json", path: "cloudcc-cli.config.json", text: true},
 	{asset: "assets/gitignore", path: ".gitignore", text: true},
-	{asset: "assets/packagejson", path: "frontend/package.json", text: true},
-	{asset: "assets/vueconfigjs", path: "frontend/vue.config.js", text: true},
-	{asset: "assets/babelconfigjs", path: "frontend/babel.config.js", text: true},
-	{asset: "assets/mainjs", path: "frontend/src/main.js", text: true},
-	{asset: "assets/Appvue", path: "frontend/src/App.vue", text: true},
-	{asset: "assets/indexhtml", path: "frontend/public/index.html", text: true},
+	{asset: "assets/frontend-readme.md", path: "frontend/README.md", text: true},
 	{asset: "assets/lib/ccopenapi-0.1.3.jar", path: "backend/lib/ccopenapi-0.1.3.jar"},
 	{asset: "assets/lib/fastjson-1.2.83.jar", path: "backend/lib/fastjson-1.2.83.jar"},
 	{asset: "assets/lib/reflections-0.9.12.jar", path: "backend/lib/reflections-0.9.12.jar"},
@@ -34,8 +29,7 @@ var projectFiles = []projectFile{
 
 var projectDirs = []string{
 	"frontend/pagecomponents",
-	"frontend/src",
-	"frontend/public",
+	"frontend/build",
 	"backend/classes",
 	"backend/triggers",
 	"backend/schedule",

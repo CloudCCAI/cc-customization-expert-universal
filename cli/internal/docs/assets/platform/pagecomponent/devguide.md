@@ -28,7 +28,9 @@
 
 ```bash
 cloudcc create pagecomponent <name>
+cloudcc package pagecomponent <name> [projectPath] --dry-run
 cloudcc publish pagecomponent <name>
+cloudcc bind pagecomponent <projectPath> <pageApi> <componentIdOrName> [--embedded true|false] [--workspace-url <url>] [--dry-run]
 cloudcc get pagecomponent [projectPath]
 cloudcc detail pagecomponent <pageComponentName> [pageComponentId] [projectPath]
 cloudcc detail pagecomponent "" <pageComponentId> [projectPath]
@@ -52,7 +54,9 @@ cloudcc doc platform/pagecomponent <introduction|devguide>
 | 命令      | 作用                                                                              |
 | --------- | --------------------------------------------------------------------------------- |
 | `create`  | 在 `frontend/pagecomponents/<name>/` 生成入口 `.vue`、`components/`、`config.json` 等模板         |
-| `publish` | 使用 `vue-cli-service` 编译并上传；首次成功且接口返回 `id` 时可写回 `config.json` |
+| `package` | 预览本次发布会采集的安全文件清单和 UMD bundle 路径，不调用远端接口 |
+| `publish` | 上传已存在的 UMD bundle；首次成功且接口返回 `id` 时可写回 `config.json` |
+| `bind`    | 将已有 customPage 的 `pageContent.comId` 和 `compList` 绑定到目标 pagecomponent，支持 `--dry-run` 只预览不保存 |
 | `get`     | 拉取云端组件列表，标准输出为 JSON                                                 |
 | `detail`  | 按目录名读本地；或按 `pageComponentId` 读云端（不传 `pageComponentName` 时）                    |
 | `pull`    | 按本地 `id` 或按传入的 ID 从云端还原文件到本地 `frontend/pagecomponents/` 等路径                  |
@@ -68,14 +72,18 @@ cloudcc get pagecomponent .
 # 2) 仅通过 create 生成目录与模板
 cloudcc create pagecomponent my_plugin
 
-# 3) 本地调试后发布（勿跳过 CLI 发布流程）
+# 3) 外部构建产出 UMD bundle 后发布（勿跳过 CLI 发布流程）
+cloudcc package pagecomponent my_plugin . --dry-run
 cloudcc publish pagecomponent my_plugin
 
-# 4) 与云端对齐或迁移机器时拉取
+# 4) 若已有 customPage 引用旧组件 id，发布后显式绑定
+cloudcc bind pagecomponent . customer_interaction_workbench component-my-plugin --embedded true --dry-run
+
+# 5) 与云端对齐或迁移机器时拉取
 cloudcc pull pagecomponent my_plugin
 # 或已知云端 ID：cloudcc pull pagecomponent <id> .
 
-# 5) 不再使用时删除云端组件
+# 6) 不再使用时删除云端组件
 cloudcc delete pagecomponent my_plugin
 ```
 
@@ -83,13 +91,9 @@ cloudcc delete pagecomponent my_plugin
 
 ## 1. 快速上手：发布第一个组件
 
-### 1.1 启动项目
+### 1.1 准备预览环境
 
-```bash
-npm run serve
-```
-
-浏览器访问 `http://localhost:8080/`，确认模板项目能正常运行。
+页面组件的本地预览属于 Go 技能运行时之外的前端流程。使用项目约定的外部前端预览方式确认模板项目能正常运行；Go CLI 不启动或管理该预览进程。
 
 ### 1.2 创建组件
 
@@ -109,8 +113,7 @@ npm run serve
 
 ### 1.4 本地预览
 
-保持 `npm run serve` 运行，在浏览器中访问
-`http://localhost:8080/`，确认组件渲染正常。
+使用项目约定的外部前端预览流程确认组件渲染正常。
 
 ### 1.5 发布组件
 
@@ -120,8 +123,44 @@ npm run serve
 cloudcc publish pagecomponent <与目录名一致的 name>
 ```
 
-CLI 会编译 `frontend/pagecomponents/<name>/<name>.vue` 并上传；首次成功且接口返回 `id`
-时可能写回 `frontend/pagecomponents/<name>/config.json`。
+CLI 不会在 Go 技能内执行 Node/npm 构建；它会读取已存在的 UMD bundle 并上传。默认读取
+`frontend/build/<component>.umd.min.js` 或 `frontend/build/<component>.umd.js`；也可在组件
+`config.json` 中设置 `bundlePath`、`prebuiltBundlePath`、`prebuiltBundle` 或 `jsBundlePath`
+指向预构建文件。首次成功且接口返回 `id` 时可能写回
+`frontend/pagecomponents/<name>/config.json`。发布成功后，输出会保留发布接口响应，并附加
+`customPageReferences`：当已有 customPage 仍指向旧 `pageContent.comId` 时会标记
+`stale_component_reference`；当没有页面引用该组件时会标记 `not_referenced`。该检查失败不会
+回滚组件发布，失败原因会写入 `customPageReferenceCheckError`。
+
+发布依赖采集默认只包含 `frontend/pagecomponents/<name>/` 下的组件源码依赖和组件
+`config.json`。根目录 `cloudcc-cli.config.json`、`.env`、token cache、`.claw-local`
+等项目配置或凭据不会进入 `compContentVue` / `dependencies`。发布前可运行：
+
+```bash
+cloudcc package pagecomponent <name> . --dry-run
+```
+
+查看将被采集的文件和 bundle 路径。
+
+注意：发布 pagecomponent 会提示 customPage 引用状态，但不会自动更新已有 customPage 的
+`pageContent.comId`。若发布返回了新的组件 id，应显式执行：
+
+```bash
+cloudcc bind pagecomponent . <pageApi> <componentIdOrName> --embedded true --workspace-url <url> --dry-run
+```
+
+确认预览 payload 后，去掉 `--dry-run` 才会保存 customPage 并生成新的 renderVersion。
+保存前 CLI 会校验 `pageContent[].comId`、`pageContent[].componentInfo.id` 与 `compList[].id`
+一致；保存失败时错误会附带 devconsole `responseBody=<json>`，便于定位底层协议拒绝原因。
+
+发布后验收建议显式校验最新组件 id：
+
+```bash
+cloudcc verify injectionPage . <pageApi> --expected-component <component-name> --expected-component-id <published-component-id>
+```
+
+如果 customPage 仍指向旧 `comId`，命令会返回 `stale_component_reference`；可用
+`--stale-policy warning` 将 stale 结果降级为 warning 以兼容分阶段验收。
 
 也可在 VS Code 中右键组件入口文件，选择「发布组件」（CloudCC
 扩展），控制台提示成功即表示已上传至平台，可在页面编辑器中使用。
@@ -868,7 +907,7 @@ componentInfo: {
 - [ ] 如使用 ECharts/定时器/监听等，注意在组件销毁时释放资源
 - [ ] 合理使用 `propObj` / `propOption` / `elePropObj` 提升组件可配置性
 - [ ] 如启用 `events` 动态代码，确保仅在可信场景使用，并有审计与限制
-- [ ] 发布前在本地 `npm run serve` 完整验证主要功能与交互
+- [ ] 发布前已通过项目约定的外部前端预览流程完整验证主要功能与交互
 
 ---
 
@@ -891,8 +930,11 @@ cloudcc create pagecomponent <name>
 cloudcc publish pagecomponent <name>
 ```
 
-- 以 `frontend/pagecomponents/<name>/<name>.vue`
-  为入口编译（`vue-cli-service build --target lib`），再上传到云端。
+- 读取已存在的 UMD bundle 并上传到云端；默认查找 `frontend/build/<component>.umd.min.js`
+  和 `frontend/build/<component>.umd.js`。
+- 如 bundle 位于其他路径，在 `frontend/pagecomponents/<name>/config.json` 中设置
+  `bundlePath`、`prebuiltBundlePath`、`prebuiltBundle` 或 `jsBundlePath`。
+- Go CLI 不调用 Node/npm；前端构建必须在 Go 技能运行前完成。
 - 首次发布成功且响应包含 `id` 时，会写回 `frontend/pagecomponents/<name>/config.json`（若此前无
   `id`）。
 

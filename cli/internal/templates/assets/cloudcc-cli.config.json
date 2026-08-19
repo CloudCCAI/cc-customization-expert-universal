@@ -1,7 +1,0 @@
-{
-    "use": "dev",
-    "dev": {
-        "safetyMark": "请设置一个安全标识",
-        "CloudCCDev": "请设置开发者密钥"
-    }
-}

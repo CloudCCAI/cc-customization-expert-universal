@@ -2,234 +2,146 @@
 
 ## 1. 模块定位
 
-`customPage` 模块用于通过 CLI 管理自定义页面，当前提供：
+`customPage` 属于 high-code 页面资源，不纳入 MetadataService/MSAPI 写域。Go CLI 只做 CloudCC devconsole 原接口封装，底层仍调用 `/devconsole/custom/pc/1.0/post/*`。
 
-- 创建页面：`cloudcc create customPage ...`
-- 更新页面：`cloudcc update customPage ...`
-- 查询页面：`cloudcc get customPage ...`
-- 删除页面：`cloudcc delete customPage ...`
-- 文档查看：`cloudcc doc platform/customPage introduction|devguide`
+低代码菜单、应用、简档可见性等元数据仍应走 MetadataService plan/apply；自定义页面本身和 pagecomponent 绑定走本模块。
 
----
-
-## 2. 开发前准备
-
-执行命令前请确认：
-
-- 已完成 `cloudcc doc platform/project devguide` 的环境准备
-- 项目路径下存在可用配置，且包含 `accessToken`
-- 当前组织已存在至少一个自定义组件（创建页面时会依赖组件列表）
-
-若配置缺失，命令会报错：
-
-```text
-Error: Configuration not found or accessToken is missing
-```
-
----
-
-## 3. 命令总览（以代码实现为准）
+## 2. 命令总览
 
 ```bash
-cloudcc create customPage [<pageLabel> <pageApi> <pluginId|compLabel>] [projectPath]
-cloudcc update customPage <id> <pageLabel> <pageApi> <pluginId|compLabel> [projectPath]
-cloudcc get customPage [pageNo] [pageSize] [projectPath]
-cloudcc delete customPage <id> [projectPath]
-cloudcc doc platform/customPage <introduction|devguide>
+cloudcc get customPage <projectPath> [pageApi]
+cloudcc detail customPage <projectPath> <pageApi|id>
+cloudcc create customPage <projectPath> <payload|@file>
+cloudcc update customPage <projectPath> <pageApi|id> <payload|@file>
+cloudcc delete customPage <projectPath> <pageApi|id>
+cloudcc bind pagecomponent <projectPath> <pageApi> <componentIdOrName> [--embedded true|false] [--workspace-url <url>] [--dry-run]
+cloudcc verify injectionPage <projectPath> <pageApi> [--expected-component <id|name>] [--expected-component-id <id>] [--expected-component-version <version>] [--stale-policy warning|failure] [--snapshot <@json|json>]
 ```
 
----
+## 3. Devconsole Envelope
 
-## 4. 创建自定义页面
+customPage 读取和保存必须使用 devconsole envelope：
 
-## 4.1 标准创建模式
+```json
+{
+  "head": {
+    "appType": "lightning-devconsole",
+    "accessToken": "<runtime-token>",
+    "source": "lightning-devconsole",
+    "version": "public"
+  },
+  "body": {}
+}
+```
+
+customPage devconsole 链路优先使用 `accessToken`，仅在缺失时回退 `pluginToken`。`detailCustomPage` 和 `deleteCustomPage` 按 identifier 类型二选一传参：24 位 ObjectId 传 `{ "id": "..." }`，其他页面 API 名传 `{ "pageApi": "..." }`，不要同时传 `id` 和 `pageApi`。CloudCC 响应必须优先判断 `returnCode`，即使 `result=true`，`returnCode=500` 也必须视为失败。
+
+CLI 输入允许把 `pageContent` 传为对象数组、把 `canvasStyleData` 传为对象；真正发送给 devconsole 时必须遵循服务端实体类型：
+
+- `pageContent`：JSON 字符串。
+- `canvasStyleData`：JSON 字符串。
+- `compList`：对象数组，每项包含 `id` 和 `compUniName`。
+- `update`：先读取当前页面并携带现有 `id`，否则服务端会把同一 `pageApi` 当作重复创建。
+
+CLI 会在 wire 层自动完成字符串化；调用者不要对已经是 JSON 字符串的字段重复编码。
+
+不要使用 CRM Web shell 的 `lightning-main` 上下文保存 customPage。token/source 不匹配时应 fail closed。
+
+## 4. 查询与回读
 
 ```bash
-cloudcc create customPage <pageLabel> <pageApi> <pluginId|compLabel> [projectPath]
+cloudcc get customPage . customer_interaction_workbench
+cloudcc detail customPage . customer_interaction_workbench
 ```
 
-参数说明：
+`detail` 会输出 `id`、`pageApi`、`renderVersion`、`canvasStyleData` 和 `componentRefs`。排查白页时先确认 `componentRefs[].comId` 是否为预期 pagecomponent id。
 
-- `pageLabel`：页面名称
-- `pageApi`：页面 API 名称
-- `pluginId|compLabel`：组件标识，支持以下任一匹配：
-  - 组件 `id`
-  - 组件 `compLabel`
-  - 组件 `compUniName`
-- `projectPath`：项目路径，默认当前目录
-
-示例：
+## 5. 更新页面
 
 ```bash
-cloudcc create customPage "合同助手页面" contract_assistant_page 2f9d0d6d2a ./
-cloudcc create customPage "合同助手页面" contract_assistant_page 合同助手组件
+cloudcc update customPage . customer_interaction_workbench @custom-page.json
 ```
 
-## 4.2 自动创建模式（无参数）
+payload 至少应包含：
+
+```json
+{
+  "pageLabel": "客户互动工作台",
+  "pageApi": "customer_interaction_workbench",
+  "pageContent": [
+    {
+      "name": "component-customer-workbench",
+      "comId": "6a4db950e4b0a577cbba1eca",
+      "embedded": true,
+      "propObj": {
+        "workspaceUrl": "https://x.agentcici.com/app?aiApp=customer-workbench"
+      }
+    }
+  ],
+  "compList": [
+    {
+      "id": "6a4db950e4b0a577cbba1eca",
+      "compUniName": "component-customer-workbench"
+    }
+  ]
+}
+```
+
+`compList` 必须使用 `{ id, compUniName }`。只传 `{ id, compName }` 会在本地校验阶段被拒绝。
+
+保存前 CLI 会本地预检 lightning-devconsole 保存 payload：`pageContent` 和 `compList` 必须能解析为对象数组，`pageContent[].comId` 必须能在 `compList[].id` 中找到；若存在 `pageContent[].componentInfo.id`，它必须与同条 `comId` 一致。预检失败不会调用 `insertCustomPage`。
+
+当 CloudCC devconsole 返回非成功 `returnCode`/`code` 时，CLI 错误会保留 `returnInfo/msg`，并附加 `responseBody=<json>`，用于排查底层保存协议或网关异常，而不是只暴露“系统发生异常”。
+
+## 6. 绑定 PageComponent
+
+pagecomponent 发布新版本或新 id 后，已有 customPage 不会自动跟随。使用绑定命令更新页面引用：
 
 ```bash
-cloudcc create customPage
+cloudcc bind pagecomponent . customer_interaction_workbench component-customer-workbench \
+  --embedded true \
+  --workspace-url https://x.agentcici.com/app?aiApp=customer-workbench \
+  --dry-run
 ```
 
-当不传 `pageLabel/pageApi/plugin` 三个参数时，CLI 会自动：
+绑定流程：
 
-1. 拉取自定义组件列表
-2. 使用列表第一个组件
-3. 生成页面名：`CLI自动页面_<timestamp>`
-4. 生成页面 API：`cc_cli_page_<timestamp>`
+1. `detailCustomPage` 回读当前页面。
+2. `detailCustomComp` 或组件列表解析目标 pagecomponent。
+3. 更新 `pageContent[].comId`、`embedded`、`propObj.workspaceUrl`、`componentInfo.id/component/loadModel`。
+4. 保存 `compList: [{ id, compUniName }]`。
+5. `--dry-run` 时只输出待保存 payload，不生成新的 customPage renderVersion。
+6. 去掉 `--dry-run` 后调用 `insertCustomPage` 保存，再次 `detailCustomPage` 回读并输出前后摘要。
 
-这是快速验证环境是否可用的便捷方式。
-
-## 4.3 参数校验规则
-
-- 三个核心参数要么**同时传入**，要么**全部省略**
-- 若只传部分参数，会报错并提示正确用法：
-
-```text
-Error: pageLabel、pageApi、pluginId/compLabel 需同时提供，或全部省略以使用第一个自定义组件
-Usage: cloudcc create customPage [<pageLabel> <pageApi> <pluginId|compLabel>] [projectPath]
-```
-
-## 4.4 创建过程说明
-
-创建命令内部会执行以下步骤：
-
-1. 读取项目配置（token、org 等）
-2. 拉取自定义组件列表
-3. 按 `id/compLabel/compUniName` 匹配组件
-4. 读取组件 `vueData`，并拼装页面内容
-5. 执行页面保存并返回创建结果
-
-常见失败场景：
-
-- 组件列表为空：`no custom components found`
-- 指定组件未找到：`component "<x>" not found in custom component list`
-- `vueData` 非合法 JSON：`plugin vueData is not valid JSON`
-
----
-
-## 5. 查询自定义页面
+## 7. 注入页诊断
 
 ```bash
-cloudcc get customPage [pageNo] [pageSize] [projectPath]
+cloudcc verify injectionPage . customer_interaction_workbench \
+  --expected-component component-customer-workbench \
+  --expected-component-id 6a4f2c24e4b0a577cbba1f4c \
+  --expected-component-version V7.0 \
+  --snapshot @runtime-snapshot.json
 ```
 
-参数说明：
+snapshot 可由浏览器验收脚本提供，例如：
 
-- `pageNo`：页码，默认 `1`
-- `pageSize`：每页数量，默认 `20`
-- `projectPath`：项目路径，默认当前目录
-
-示例：
-
-```bash
-cloudcc get customPage
-cloudcc get customPage 1 50 ./
+```json
+{
+  "hasElement": true,
+  "hasIframe": true,
+  "iframeSrc": "https://x.agentcici.com/app?aiApp=customer-workbench"
+}
 ```
 
-执行成功后会输出总数，并逐条打印页面：
+常见诊断状态：
 
-- `ID`
-- `Label`（`pageLabel`）
-- `API`（`pageApi`）
+- `passed`
+- `stale_component_reference`
+- `warning`（当 `--stale-policy warning` 且发现 stale component id/version 时）
+- `custom_page_missing`
+- `component_not_mounted`
+- `iframe_missing`
 
----
+`--expected-component` 传组件名时，CLI 会尝试解析当前线上 pagecomponent 的最新 id；若 customPage 仍引用旧 `comId`，即使组件名匹配也会输出 `stale_component_reference`。已知最新组件 id 时优先显式传 `--expected-component-id`；只想提示但不阻断验收时可传 `--stale-policy warning`。
 
-## 6. 更新自定义页面
-
-```bash
-cloudcc update customPage <id> <pageLabel> <pageApi> <pluginId|compLabel> [projectPath]
-```
-
-参数说明：
-
-- `id`：页面 ID（必填，更新时必须有值）
-- `pageLabel`：页面名称（必填）
-- `pageApi`：页面 API 名称（必填）
-- `pluginId|compLabel`：组件标识（必填，支持 `id/compLabel/compUniName`）
-- `projectPath`：项目路径，默认当前目录
-
-说明：
-
-- 更新与新建使用同一套保存逻辑
-- 更新通过传入 `id` 实现；新建时 `id` 为空字符串
-- 更新时会按目标组件重新生成 `pageContent`，从而支持“更新自定义组件”
-
-示例：
-
-```bash
-cloudcc update customPage 2f9d0d6d2a "合同助手页面V2" contract_assistant_page_v2 3a8b7c6d5e ./
-cloudcc update customPage 2f9d0d6d2a "合同助手页面V2" contract_assistant_page_v2 合同助手组件
-```
-
----
-
-## 7. 删除自定义页面
-
-```bash
-cloudcc delete customPage <id> [projectPath]
-```
-
-参数说明：
-
-- `id`：页面 ID（必填）
-- `projectPath`：项目路径，默认当前目录
-
-示例：
-
-```bash
-cloudcc delete customPage 2f9d0d6d2a
-cloudcc delete customPage 2f9d0d6d2a ./
-```
-
-若缺少 `id`，会报错：
-
-```text
-Error: Custom page ID is required
-Usage: cloudcc delete customPage <id> [projectPath]
-```
-
----
-
-## 8. 文档命令
-
-```bash
-cloudcc doc platform/customPage introduction
-cloudcc doc platform/customPage devguide
-```
-
-说明：
-
-- 仅支持 `introduction` 与 `devguide`
-- 传入其他子命令会抛错
-
----
-
-## 9. 推荐操作流程
-
-```bash
-# 1) 先查列表，确认现有页面
-cloudcc get customPage
-
-# 2) 创建页面（标准模式）
-cloudcc create customPage "合同助手页面" contract_assistant_page 2f9d0d6d2a
-
-# 3) 更新页面并切换到新组件
-cloudcc update customPage <id> "合同助手页面V2" contract_assistant_page_v2 <pluginId|compLabel>
-
-# 4) 再查列表，确认创建/更新成功
-cloudcc get customPage
-
-# 5) 如需回滚，按 ID 删除
-cloudcc delete customPage <id>
-```
-
----
-
-## 10. 注意事项
-
-- `create` 强依赖自定义组件，先确保组件已存在
-- `update` 同样依赖自定义组件匹配，组件不存在会报错
-- 建议优先使用可读性高的 `pageApi` 命名（如业务域+功能）
-- 删除前先确认页面未被菜单或其他入口依赖
-- 生产环境操作前，先在测试环境验证参数与组件匹配
+仅 customPage 回读成功不代表运行态成功；CRM 注入页还需要确认 CDN 脚本、DOM mount、iframe 或主内容可见。
