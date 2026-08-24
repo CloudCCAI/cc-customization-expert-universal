@@ -1,12 +1,12 @@
 ﻿---
 name: cc-customization-expert-universal
-version: 2.2.17-universal
+version: 2.2.19-universal
 description: CloudCC CRM/PaaS 实施与开发的 Go 离线技能。Universal package: auto probes configured MetadataService read-only, otherwise uses UIAPI.
 ---
 
-# CloudCC CRM 实施专家技能 Universal v2.2.17-universal
+# CloudCC CRM 实施专家技能 Universal v2.2.19-universal
 
-当前技能版本：`2.2.17-universal`。分发名：`cc-customization-expert-universal`。
+当前技能版本：`2.2.19-universal`。分发名：`cc-customization-expert-universal`。
 
 ## Provider 规则
 
