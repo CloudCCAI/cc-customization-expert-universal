@@ -468,7 +468,7 @@ List<CCObject> cquery(String objectApiName, String expression, String ordings)
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `objectApiName` | String | 是 | 对象 API 名称，如 `"Account"`、`"Contact"`，标准对象 `User` 自动映射为 `ccuser`，`Case` 自动映射为 `cloudcccase` |
-| `expression` | String | 是 | 查询条件，SQL WHERE 子句格式，是数据库侧过滤边界，不是 Java 侧事后过滤的候选集描述。业务代码必须传入可收敛的过滤条件；`"1=1"` 只允许用于明确的后台诊断/导出场景，禁止用于查重、存在性判断、幂等判断或编号生成前置判断。`cquery*` 系列方法有平台返回条数上限，默认通常为 5000 且可配置，因此 `1=1` 后循环比对既慢又可能漏判。支持 `=`、`!=`、`>`、`<`、`LIKE`、`IN`、`AND`、`OR` 等标准 SQL 运算符 |
+| `expression` | String | 是 | 查询条件，SQL WHERE 子句格式，是数据库侧过滤边界，不是 Java 侧事后过滤的候选集描述。业务代码必须传入可收敛的过滤条件；`"1=1"` 只允许用于明确的后台诊断/导出场景，禁止用于代码兜底查重、存在性判断或幂等判断。普通自动编号应使用平台自动编号字段，不应通过查询已有记录后自行生成。`cquery*` 系列方法有平台返回条数上限，默认通常为 5000 且可配置，因此 `1=1` 后循环比对既慢又可能漏判。支持 `=`、`!=`、`>`、`<`、`LIKE`、`IN`、`AND`、`OR` 等标准 SQL 运算符 |
 | `ordings` | String | 否 | 排序子句，格式为 `ORDER BY 字段名 ASC\|DESC`，支持多字段排序 |
 
 **返回值**
@@ -695,7 +695,7 @@ CloudCC Query Language（CQL）查询，类似 SQL，直接传入查询语句执
 
 **适用场景**
 
-复杂联查、需要精确控制 SQL 语句的场景，如跨对象关联查询等。
+复杂联查、需要精确控制 SQL 语句的场景，如跨对象关联查询等。业务查询默认只读取未逻辑删除数据。
 
 **方法签名**
 
@@ -718,7 +718,7 @@ List<CCObject> cqlQueryWithLogInfo(String objectApiName, String cql, String logL
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `objectApiName` | String | 是（联查时不需要） | 主对象 API 名称，多对象联查时传逗号分隔的对象名，如 `"Account,Contact"` |
-| `cql` | String | 是 | CQL 查询语句，语法参考 SQL SELECT，字段名使用对象字段 API 名 |
+| `cql` | String | 是 | CQL 查询语句，语法参考 SQL SELECT，字段名使用对象字段 API 名。平台业务数据删除默认是逻辑删除，AI 生成业务查询时必须默认为每个业务对象拼接逻辑删除过滤，常见字段为 `is_deleted = '0'`；联查时按对象别名拼接，如 `a.is_deleted = '0'`、`c.is_deleted = '0'`。若目标对象实际字段为 `is_delete` 或其他名称，必须按实际字段拼接。只有用户明确要求查询回收站/已删除数据、删除审计或删除状态对比时，才允许不加该条件 |
 | `logLevel` | String | 否 | 日志级别，`"DEBUG"`、`"INFO"`、`"ERROR"` |
 
 **返回值**
@@ -728,32 +728,48 @@ List<CCObject> cqlQueryWithLogInfo(String objectApiName, String cql, String logL
 
 > 注意：CQL 语句会经过合法性校验，禁止 DDL 操作（DROP、CREATE、ALTER 等），违反则返回 `null` 或抛出异常。
 
+> 注意：`cqlQuery` 不要假设平台会自动排除逻辑删除数据。生成自定义类、触发器或定时类中的业务 CQL 时，默认必须把平台逻辑删除条件写入每个业务对象的 `WHERE` 条件，常见写法是 `is_deleted = '0'`；如果目标对象使用别名或不同逻辑删除字段名，例如 `is_delete`，必须按实际字段和别名补齐。
+
 **示例**
 
 ```java
 // 单对象 CQL 查询
 List<CCObject> list = ccService.cqlQuery(
     "Account",
-    "SELECT id, name__c, phone__c FROM Account WHERE status__c = '启用'"
+    "SELECT id, name__c, phone__c FROM Account " +
+    "WHERE is_deleted = '0' AND status__c = '启用'"
 );
 
 // 多对象联查（联系人关联客户）
 List<Map> list2 = ccService.cqlQuery(
     "SELECT a.id, a.name__c, c.name__c AS contactName " +
     "FROM Account a, Contact c " +
-    "WHERE a.id = c.accountid__c AND a.status__c = '启用'"
+    "WHERE a.is_deleted = '0' AND c.is_deleted = '0' " +
+    "AND a.id = c.accountid__c AND a.status__c = '启用'"
 );
 
 // 需要抛出异常时使用
 try {
     List<CCObject> list3 = ccService.cqlQueryThrowException(
         "Account",
-        "SELECT id, name__c FROM Account WHERE id = 'xxx'"
+        "SELECT id, name__c FROM Account WHERE is_deleted = '0' AND id = 'xxx'"
     );
 } catch (Exception e) {
     System.out.println("CQL 执行失败：" + e.getMessage());
 }
 ```
+
+错误写法：
+
+```java
+// 缺少 is_deleted = '0'，会把逻辑删除数据也纳入业务判断
+List<CCObject> list = ccService.cqlQuery(
+    "Account",
+    "SELECT id, name__c FROM Account WHERE status__c = '启用'"
+);
+```
+
+如果需求明确要看已删除数据，应在代码注释或方法名中说明业务原因，例如回收站查询、删除审计或删除状态对比；普通查重、存在性判断、同步读取、报表辅助查询、触发器/定时类业务处理都必须默认排除已删除数据。
 
 ---
 
@@ -788,7 +804,7 @@ List<CCObject> pagedQuery(String objectApiName, String expression, String pageNU
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `objectApiName` | String | 是 | 对象 API 名称 |
-| `expression` | String | 是 | 查询条件。分页查询也必须有业务边界；后台诊断以外不要用 `"1=1"` 扫描大对象。查重/存在性判断推荐 `pageNUM="1"`、`pageSize="1"`、`fields="id"`，把业务键条件直接写入 expression |
+| `expression` | String | 是 | 查询条件。分页查询也必须有业务边界；后台诊断以外不要用 `"1=1"` 扫描大对象。代码兜底查重或存在性判断使用 `pageNUM="1"`、`pageSize="1"`、`fields="id"`，把业务键条件直接写入 expression；普通保存查重优先使用 `dupeCatcher` |
 | `pageNUM` | String | 是 | 当前页码，**从 `"1"` 开始**，传 String 类型 |
 | `pageSize` | String | 是 | 每页记录数，如 `"20"`、`"50"`，传 String 类型 |
 | `isAddDelete` | String | 否 | `"true"` 附带删除权限标记 |
@@ -2729,7 +2745,7 @@ AI 生成或改写自定义类时，单个 Java 源文件必须控制在 2000 �
 
 AI 需要根据调用场景选择返回值类型：
 
-- 页面/按钮/组件接口：优先 `JSONObject`、`Map` 或稳定结构对象
+- 页面/按钮/组件接口：优先 `Map<String,Object>`、`List<Map<String,Object>>` 或稳定 Java DTO
 - 内部服务方法：优先返回明确业务结果
 - 仅做写操作的方法：可返回 `void`，但必须通过异常或日志暴露失败
 
@@ -2738,6 +2754,8 @@ AI 需要根据调用场景选择返回值类型：
 - 返回值结构要稳定
 - 不要同一方法一会儿返回字符串、一会儿返回对象
 - 对外接口最好带成功标识和错误信息
+- 不推荐使用 `net.sf.json.JSONObject` / `JSONArray` 作为业务返回值或通用中间结构；该库效率低，且 null 值容易产生 `JSONNull` 相关运行时问题
+- 如果历史方法签名或外部调用方已经固定为 `net.sf.json`，只能做局部兼容；新生成代码必须优先返回 `Map` / `List<Map>`，并显式处理 null
 
 ## 8. 数据与查询规范
 
@@ -2752,11 +2770,19 @@ AI 不得使用字段显示名直接拼查询条件。
 
 ### 8.2 查询要收敛
 
+先做能力分流：
+
+- 所有需求都要先判断平台标准元数据能力是否可满足，不局限于某个低代码功能。对象/字段、页面布局、验证规则、查重过滤器、工作流/审批、共享/权限、公式/汇总、自动编号、查找筛选、相关列表等能满足时，优先用平台元数据实现；只有低代码能力无法表达时，才写自定义类代码。
+- 普通自动编号、单据号、流水号、客户号、合同号等需求，优先使用平台自动编号字段（字段类型 `V`，通过 `platform/fields devguide` 的 MetadataService spec 生成字段行和 `tp_sys_autonum` 配置），不要在自定义类里用查询已有记录再 `+1` 的方式模拟编号。
+- 保存时按对象字段和条件判断重复、提示或阻断重复记录，优先使用平台查重过滤器 `dupeCatcher`。只有查重过滤器无法表达的跨对象、动态外部校验、复杂聚合条件或后台治理场景，才进入自定义类代码实现。
+- 能由字段、验证规则、查重过滤器、工作流、审批等平台元数据实现的需求，不要默认写 Java 代码。
+
 AI 默认应避免：
 
 - 无条件全表查询
 - 无限制 `select *`
 - 在循环里反复查同一批数据
+- 在 `for` / `while` 循环内调用 `cquery`、`cqueryByFields`、`cqlQuery`、`pagedQuery` 等查询方法做逐条补字段、逐条查重或逐条存在性判断
 - 为了判断“是否存在”“是否重复”“是否已处理”而先查出整张表再在 Java 中循环比对
 - 把 `cquery*` 的 `expression` 当成“候选集描述”，再用 Java 判断真正条件
 
@@ -2764,6 +2790,9 @@ AI 默认应避免：
 
 - `expression` 是数据库侧过滤条件，查重、存在性、幂等和编号前置判断必须把真正的业务键下推到这里
 - `cquery*` 相关方法有平台返回条数上限，默认通常为 5000 且可配置；`1=1` 后循环最多只能判断返回窗口内的数据，大表上会出现假阴性
+- 循环内查询会形成 N+1 查询：输入 200 条就可能打 201 次查询，触发器和定时类中会快速放大为超时、锁等待或接口限流
+- 大数量查重、补齐引用对象字段、同步前置读取、列表组装等场景必须先收集 key，再批量查询和本地映射
+- `cqlQuery` 是手写 CQL，不要假设平台自动过滤逻辑删除数据；默认必须为每个业务对象拼接 `is_deleted = '0'`
 - 即使当前数据量小，生成代码也不能假设对象永远小；这类代码一旦进入触发器、定时类或复用自定义类，会随业务增长放大为性能和正确性问题
 
 应优先：
@@ -2772,7 +2801,10 @@ AI 默认应避免：
 - 只查必要字段
 - 把业务键、当前记录排除条件、状态、时间范围等边界写进查询条件
 - 存在性判断只取 `id`，并用 `pagedQuery(..., "1", "1", ..., "id")` 或有明确条件的 `cqueryByFields`
-- 提前构造索引或映射
+- 使用 `cqlQuery` 联查时，为每个业务对象或别名补上逻辑删除条件，例如 `a.is_deleted = '0' AND c.is_deleted = '0'`
+- 先遍历输入收集去重后的 ID / 业务键，再用 `IN` 条件或分页分批查询必要字段
+- 提前构造 `Map<Id, CCObject>`、`Map<String, CCObject>` 或 `Map<String, Map<String,Object>>`，循环阶段只做内存查找和结果组装
+- 当 `IN` 值较多时按固定批次分片查询，避免单条 CQL/SQL 过长
 - 把批量处理合并到同一逻辑块
 
 查重/存在性判断禁止写法：
@@ -2787,7 +2819,7 @@ for (int i = 0; i < accounts.size(); i++) {
 }
 ```
 
-正确写法应把查重字段直接下推到查询条件，只返回必要字段：
+如果平台 `dupeCatcher` 无法覆盖，代码兜底写法才应把查重字段直接下推到查询条件，只返回必要字段：
 
 ```java
 String escapedTax = newTax.replace("'", "\\'");
@@ -2800,7 +2832,55 @@ List exists = cs.pagedQuery("Account", expression, "1", "1", "false", "id");
 boolean duplicateTax = exists != null && exists.size() > 0;
 ```
 
-如果后续只需要编号基数，也不能为了 `size()` 查全量；必须改用带业务范围的计数/分页策略，或把编号生成交给平台自动编号/独立编号对象，避免并发下重复编号。
+循环内查询禁止写法：
+
+```java
+for (int i = 0; i < materials.size(); i++) {
+    CCObject material = (CCObject) materials.get(i);
+    String materialId = text(material.get("sku_id"));
+    List products = cs.cqueryByFields(
+        "Product",
+        "id = '" + escape(materialId) + "'",
+        "id,name,cpdm,kz"
+    );
+    // 每条 material 都查一次 Product，形成 N+1 查询
+}
+```
+
+正确写法应先收集 key，再批量查询并构建映射：
+
+```java
+Set<String> materialIds = new HashSet<String>();
+for (int i = 0; i < materials.size(); i++) {
+    CCObject material = (CCObject) materials.get(i);
+    String materialId = text(material.get("sku_id"));
+    if (materialId.length() > 0) {
+        materialIds.add(materialId);
+    }
+}
+
+Map<String, CCObject> productById = new HashMap<String, CCObject>();
+if (!materialIds.isEmpty()) {
+    String expression = "id in (" + quoteForIn(materialIds) + ")";
+    List products = cs.cqueryByFields("Product", expression, "id,name,cpdm,kz");
+    if (products != null) {
+        for (int i = 0; i < products.size(); i++) {
+            CCObject product = (CCObject) products.get(i);
+            productById.put(text(product.get("id")), product);
+        }
+    }
+}
+
+for (int i = 0; i < materials.size(); i++) {
+    CCObject material = (CCObject) materials.get(i);
+    CCObject product = productById.get(text(material.get("sku_id")));
+    // 这里只做内存映射和结果组装
+}
+```
+
+`quoteForIn` 代表本地辅助方法：必须对每个 ID/业务键做去空、去重、单引号转义，再拼成 `'id1','id2'` 形式；如果 key 数量很多，应按固定批次分片生成多个 `IN` 查询。
+
+普通编号生成不能为了 `size()` 查全量，也不应通过 `max/count + 1` 在自定义类里模拟；必须优先交给平台自动编号字段。只有平台自动编号无法覆盖的特殊号段需求，才允许使用独立编号对象或受控代码实现，并且必须说明并发锁、幂等和回滚策略。
 
 ### 8.3 写操作要可回溯
 
@@ -2915,6 +2995,8 @@ AI 不得：
 - 默认使用 `new Date()` 作为业务时间
 - 使用字段显示名代替 API 名称
 - 无条件全量查询大对象
+- 在循环内执行查询造成 N+1 查询；必须先收集 key 批量读取
+- 生成缺少 `is_deleted = '0'` 的业务 `cqlQuery`，除非需求明确包含已删除数据
 - 生成超过 2000 行的单个 Java 源文件
 - 将复杂业务需求全部塞进一个自定义类而不拆分职责
 - 将关键逻辑全部堆在入口方法里
@@ -2947,13 +3029,15 @@ AI 完成代码后，必须自检：
    等，对外或需数据权限用 `cqueryWithRoleRight`；复杂联查用 `cqlQuery`，分页用
    `pagedQuery` / `pageQuery` 等）
 4. 是否所有查重、存在性判断、幂等判断都带业务键过滤，并且没有用 `1=1` 全量查询后循环比对
-5. 是否对写操作做了失败处理
-6. 是否对关键步骤加了日志
-7. 是否避免了直接 `new Date()`
-8. 是否把复杂逻辑拆成了可读的方法
-9. 是否单个 Java 文件低于 2000 行；复杂需求是否拆分成多个自定义类
-10. 是否避免了不必要硬编码
-11. 是否让返回结果对调用方足够清晰
+5. 是否没有在循环内执行查询；补齐引用字段、查重、存在性判断是否先收集 key 后批量查询并构建 Map
+6. 是否所有业务 `cqlQuery` 都默认排除逻辑删除数据；多对象联查是否为每个对象别名加了 `is_deleted = '0'`
+7. 是否对写操作做了失败处理
+8. 是否对关键步骤加了日志
+9. 是否避免了直接 `new Date()`
+10. 是否把复杂逻辑拆成了可读的方法
+11. 是否单个 Java 文件低于 2000 行；复杂需求是否拆分成多个自定义类
+12. 是否避免了不必要硬编码
+13. 是否让返回结果对调用方足够清晰
 
 ## 17. 推荐骨架
 
@@ -2961,8 +3045,9 @@ AI 完成代码后，必须自检：
 
 
 ```java
-import net.sf.json.JSONObject;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 // 这里包含了DevLogger，SendEmail等常用方法，不用再单独引入。
 import com.cloudcc.core.*;
 
@@ -2978,14 +3063,14 @@ public class XxxService {
         this.logger = new DevLogger(userInfo);
     }
 
-    public JSONObject execute(String recordId) throws Exception {
-        JSONObject result = new JSONObject();
+    public Map<String, Object> execute(String recordId) throws Exception {
+        Map<String, Object> result = new HashMap<String, Object>();
         logger.devLogInfo("XxxService.execute start, recordId=" + recordId);
         try {
             validate(recordId);
 
             List<CCObject> records = queryData(recordId);
-            JSONObject calcResult = calculate(records);
+            Map<String, Object> calcResult = calculate(records);
             updateData(recordId, calcResult);
 
             result.put("success", true);
@@ -3008,13 +3093,13 @@ public class XxxService {
         return cs.cquery("ObjectApiName", "id = '" + recordId + "'", null);
     }
 
-    private JSONObject calculate(List<CCObject> records) {
-        JSONObject result = new JSONObject();
+    private Map<String, Object> calculate(List<CCObject> records) {
+        Map<String, Object> result = new HashMap<String, Object>();
         result.put("count", records == null ? 0 : records.size());
         return result;
     }
 
-    private void updateData(String recordId, JSONObject calcResult) throws Exception {
+    private void updateData(String recordId, Map<String, Object> calcResult) throws Exception {
         CCObject obj = new CCObject("ObjectApiName");
         obj.put("id", recordId);
         obj.put("last_execute_time", TimeUtil.getNowDate(userInfo));
