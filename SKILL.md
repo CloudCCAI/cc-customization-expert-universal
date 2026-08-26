@@ -1,12 +1,12 @@
-﻿---
+---
 name: cc-customization-expert-universal
-version: 2.2.29-universal
+version: 2.2.30-universal
 description: "CloudCC CRM/PaaS 实施与开发的 Go 离线技能。Universal package: auto probes configured MetadataService read-only, otherwise uses UIAPI."
 ---
 
-# CloudCC CRM 实施专家技能 Universal v2.2.29-universal
+# CloudCC CRM 实施专家技能 Universal v2.2.30-universal
 
-当前技能版本：`2.2.29-universal`。分发名：`cc-customization-expert-universal`。
+当前技能版本：`2.2.30-universal`。分发名：`cc-customization-expert-universal`。
 
 ## Provider 规则
 
@@ -57,4 +57,3 @@ tools/bin/cloudcc publish classes ExampleClass /path/to/project
 ```
 
 MSAPI 的 `plan/apply/changes/rollback`、setup-svc parity replay 和报告/字段等详细命令使用 `cloudcc --help` 与内置 `platform/*` 文档。UIAPI 模式下仅使用已适配的低代码资源命令；未适配域会返回明确错误。
-
