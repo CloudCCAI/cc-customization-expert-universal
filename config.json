@@ -1,6 +1,6 @@
 {
     "packageName":  "cc-customization-expert-universal",
-    "version":  "2.2.73-universal",
+    "version":  "2.2.74-universal",
     "releaseDate":  "2026-09-21",
     "compatCloudccCliVersion":  "2.5.3",
     "runtime":  "go",
