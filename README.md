@@ -1,4 +1,4 @@
-# cc-customization-expert-universal v2.2.75-universal
+# cc-customization-expert-universal v2.2.76-universal
 
 CloudCC CRM/PaaS 离线 Go 技能，发布目标：`Universal`。
 
@@ -16,6 +16,8 @@ tools/bin/cloudcc format highcode /path/to/project --check
 ```
 
 Universal package: auto probes configured MetadataService read-only, otherwise uses UIAPI.
+
+从技能 `2.2.76` 开始，报表和仪表板安全写入要求 MetadataService `1.1.68` 或更高版本，覆盖根更新与聚合替换分流、集合三态、Matrix 两行分组上限、`totalrecord` 闭包、引用保护和完整删除清理。
 
 该包由 `cc-customization-expert-go` 的共享核心生成。低代码能力及 provider 状态见 `capability-matrix.json`；高代码资源继续复用 CloudCC 原 resource/API 通道。
 
