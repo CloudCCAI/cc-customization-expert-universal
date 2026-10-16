@@ -1,4 +1,4 @@
-# cc-customization-expert-universal v2.2.95-universal
+# cc-customization-expert-universal v2.2.96-universal
 
 CloudCC CRM/PaaS 离线 Go 技能，发布目标：`Universal`。
 
