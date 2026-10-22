@@ -1,6 +1,42 @@
-# cc-customization-expert-universal v2.2.101-universal
+# cc-customization-expert-universal v2.2.104-universal
 
 CloudCC CRM/PaaS 离线 Go 技能，发布目标：`Universal`。
+
+## 全局安装（Mac / Windows）
+
+首次安装或移动技能目录后，在完整技能目录执行安装脚本；不要只复制单个二进制，否则自定义类编译器等配套资产可能无法找到。无需管理员权限，也不在线安装 CLI。
+
+macOS（自动识别 Intel AMD64 / Apple Silicon ARM64，支持 zsh、bash）：
+
+```bash
+sh tools/install.sh
+export PATH="$HOME/.local/bin:$PATH"
+cloudcc --version
+cloudcc doc list
+```
+
+安装器在 `~/.local/bin` 建立入口并幂等更新当前 shell 的用户启动文件；新终端自动生效。上面的 export 让当前终端立即生效。
+
+Windows（在技能目录的 PowerShell 执行，自动识别 AMD64 / ARM64）：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+& .\tools\install.ps1
+cloudcc --version
+cloudcc doc list
+```
+
+安装器在 `%LOCALAPPDATA%\CloudCC\bin` 创建启动器并配置用户 PATH；安装 PowerShell 会话立即可用，其他已打开的终端/应用需重启。只临时设置当前进程的脚本策略，不修改系统级执行策略或 PATH。
+
+包内 `tools/bin/cloudcc` 和 `tools\bin\cloudcc.cmd` 也会自动选择平台/架构，可不全局安装而直接运行。全局命令引用当前完整技能目录，正常原地升级后继续可用；移动目录后重新安装。重复安装不会重复增加 PATH，已有非受管同名文件会报错而不会被覆盖。Windows 技能路径不能包含 `%` 或换行。
+
+## 文档查询
+
+`tools/bin/cloudcc doc` 和 `tools/bin/cloudcc doc list` 列出离线模块索引及两类文档命令。
+使用 `tools/bin/cloudcc doc <module> introduction` 阅读功能介绍，使用
+`tools/bin/cloudcc doc <module> devguide` 阅读命令、参数和示例；省略类型默认读取 devguide。
+支持模块短名、资源名/别名及完整路径，例如 `classes`、`objects`、`user`、
+`platform/classes`、`methodology/projectGovernance`。查询文档不读取项目配置或访问网络。
 
 ## Runtime
 
@@ -51,6 +87,8 @@ Universal package: auto probes configured MetadataService read-only, otherwise u
 从 `2.2.100` 与 MetadataService `1.1.86` 开始，MSAPI `J` 长文本字段显式 `schemefieldLength` 最多为 131072，省略时仍默认 32000，并继续使用 `clob_fieldN`；setup-service/setup-web 保持不变。
 
 从 `2.2.101` 与 MetadataService `1.1.87` 开始，`ccchat` 作为唯一一级 Domain 管理全局设置与对象微贴跟踪。MSAPI 由 MetadataService 审计编排并交给 setup-service 权威执行；Lightning UIAPI 直连既有接口，horizontal UIAPI 失败关闭。数据归档不在本能力范围内。
+
+从 `2.2.104` 与 MetadataService `1.1.88` 开始，MSAPI 存储字段按目标对象实际物理列分配数字序最小的空槽；`J` 与 `A` 共享真实 `clob_fieldN` 池，`J` 不再有固定条数限制。Lightning setup-service/setup-web 的既有限制保持不变。
 
 从 `2.2.93` 开始，字段公式能力按 setup-svc 的实际 SQL 执行链路说明：不再把独立 JavaScript 表达式引擎的函数当成字段公式内建函数；MySQL 原生函数、可选 Oracle 兼容存储函数和 CloudCC 专用函数分别记录。MetadataService `1.1.77` 会生成 MySQL `concat(...)` HYPERLINK，并在计划阶段执行目标数据库只读预检。
 

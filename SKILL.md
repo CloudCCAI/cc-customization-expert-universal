@@ -1,12 +1,12 @@
 ---
 name: cc-customization-expert-universal
-version: 2.2.101-universal
+version: 2.2.104-universal
 description: "CloudCC CRM/PaaS 实施与开发的 Go 离线技能。Universal package: auto probes configured MetadataService read-only, otherwise uses UIAPI."
 ---
 
-# CloudCC CRM 实施专家技能 Universal v2.2.101-universal
+# CloudCC CRM 实施专家技能 Universal v2.2.104-universal
 
-当前技能版本：`2.2.101-universal`。分发名：`cc-customization-expert-universal`。
+当前技能版本：`2.2.104-universal`。分发名：`cc-customization-expert-universal`。
 
 ## Provider 规则
 
@@ -17,6 +17,53 @@ description: "CloudCC CRM/PaaS 实施与开发的 Go 离线技能。Universal pa
 - 每次环境切换或首次写入前运行：`tools/bin/cloudcc doctor provider <projectPath>`。输出会明确所选 provider、原因、安全级别和目标 MetadataService/setup-svc 兼容性。
 - `auto` 仅对已配置的 MetadataService 做 `GET /metadata/v1/capabilities` 只读探测；未配置时选择 UIAPI。已配置但不可用、认证失败或不兼容时失败关闭，绝不静默降级。
 - MSAPI 原生提供服务端 plan/apply/changes/rollback；UIAPI 是直接 CloudCC UI/API 调用，不承诺服务端 ledger 或 rollback。不要把 UIAPI 补偿操作当作 MSAPI 回滚。
+
+## 全局安装（Mac / Windows）
+
+首次安装或移动技能目录后，在完整技能目录执行安装脚本；不要只复制单个二进制，否则自定义类编译器等配套资产可能无法找到。无需管理员权限，也不在线安装 CLI。
+
+macOS（自动识别 Intel AMD64 / Apple Silicon ARM64，支持 zsh、bash）：
+
+```bash
+sh tools/install.sh
+export PATH="$HOME/.local/bin:$PATH"
+cloudcc --version
+cloudcc doc list
+```
+
+安装器在 `~/.local/bin` 建立入口并幂等更新当前 shell 的用户启动文件；新终端自动生效。上面的 export 让当前终端立即生效。
+
+Windows（在技能目录的 PowerShell 执行，自动识别 AMD64 / ARM64）：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+& .\tools\install.ps1
+cloudcc --version
+cloudcc doc list
+```
+
+安装器在 `%LOCALAPPDATA%\CloudCC\bin` 创建启动器并配置用户 PATH；安装 PowerShell 会话立即可用，其他已打开的终端/应用需重启。只临时设置当前进程的脚本策略，不修改系统级执行策略或 PATH。
+
+包内 `tools/bin/cloudcc` 和 `tools\bin\cloudcc.cmd` 也会自动选择平台/架构，可不全局安装而直接运行。全局命令引用当前完整技能目录，正常原地升级后继续可用；移动目录后重新安装。重复安装不会重复增加 PATH，已有非受管同名文件会报错而不会被覆盖。Windows 技能路径不能包含 `%` 或换行。
+
+## 文档索引与按需读取
+
+文档内嵌在 CLI 中，无需项目配置、凭据或网络。先查询索引，再按需读取目标模块：
+
+```bash
+tools/bin/cloudcc doc
+tools/bin/cloudcc doc list
+tools/bin/cloudcc doc classes introduction
+tools/bin/cloudcc doc classes devguide
+tools/bin/cloudcc doc objects introduction
+tools/bin/cloudcc doc user devguide
+```
+
+- `doc` 与 `doc list` 等价，列出全部文档模块、完整路径及 introduction/devguide 命令。
+- `introduction` 用于理解功能定位、适用场景和能力边界；`devguide` 用于查询命令、参数、示例与操作流程。省略类型默认读取 devguide。
+- 支持索引中的模块名、完整路径，以及能力目录中的资源名和别名，例如 `classes`/`class`、`objects`/`object`、`layouts`/`pagelayout`。旧命令 `cloudcc doc platform/classes devguide` 保持兼容。
+- 方法论文档和业务 playbook 同样可用短名或完整路径，例如 `cloudcc doc projectGovernance devguide`、`cloudcc doc playbooks/serviceWorkOrder introduction`。
+- 方案设计先读相关模块 introduction，实施前读 devguide；不要一次展开全部文档。索引覆盖多个平台及规划能力，是否可执行仍以具体文档、Domain 路由和目标环境检查为准。
 
 ## 必须保留
 
@@ -46,6 +93,7 @@ description: "CloudCC CRM/PaaS 实施与开发的 Go 离线技能。Universal pa
 - 从技能 `2.2.99` 与 MetadataService `1.1.85` 开始，MSAPI `fieldTracking` 对已有候选字段的追踪配置不限制数量，也不读取或校验公有云 `FIELD_TRACK / RES010`；字段资格、系统管理字段保护、apply 漂移、完整替换与回滚保持不变。Lightning UIAPI 的限制由 setup-service 决定。
 - 从技能 `2.2.100` 与 MetadataService `1.1.86` 开始，MSAPI `J` 长文本字段省略长度时仍默认 32000，显式 `schemefieldLength` 可设为 1～131072，并继续使用 `clob_fieldN`；setup-service 与 setup-web 的限制不在本次改造范围内。
 - 从技能 `2.2.101` 与 MetadataService `1.1.87` 开始，`ccchat` 是全局设置与对象微贴跟踪的唯一一级 Domain。MSAPI 由 MetadataService 审计并调用 setup-service 权威执行，Lightning UIAPI 直连既有接口，horizontal UIAPI 失败关闭；Mongo 路由仍归 setup-service，数据归档不在范围内。完整用法见 `cloudcc doc ccchat devguide`。
+- 从技能 `2.2.104` 与 MetadataService `1.1.88` 开始，MSAPI 存储字段从目标对象实际物理列中选择数字序最小的空槽；`J` 与 `A` 共享真实 `clob_fieldN` 池，`J` 不再受固定条数限制，槽位耗尽、错族、越界和 apply 漂移均失败关闭。Lightning setup-service/setup-web 的既有限制保持不变。
 - 从技能 `2.2.93` 开始，字段公式文档以 setup-svc 实际 SQL 执行链路为准：不再把独立 JavaScript 表达式引擎的 `VALUE/TODAY/ADDDAYS/...` 当成字段公式内建函数，改为记录 MySQL 原生写法及目标库已安装的 `to_char/to_date/to_number/trunc`、`to_mcode/to_mlang/to_mlang_type`。MetadataService `1.1.77` 会为 MySQL HYPERLINK 生成 `concat(...)`，并在计划阶段对目标数据库执行只读预检。
 - 从技能 `2.2.94` 开始，自定义设置字段新增/修改统一走 MetadataService 局部更新：字段标签按 `relationId + type + country` 插入或更新并保留已有语言行 ID，布局采用非破坏式补齐并复用空父 ID 的 setup-svc 根布局，无效布局策略、更新 0 行或自然键歧义会失败；CLI 用户文档只保留真实可用的 plan/apply/readback 命令。需要 MetadataService `1.1.80`。
 - `fieldDependency` 的完整用户入口是 `cloudcc doc fieldDependency`：先查询 candidates 和当前配置，再使用同一套字段对/JSON spec 命令；MSAPI 写入只生成 plan 并支持 changes/rollback，Lightning UIAPI 直接提交，horizontal UIAPI 失败关闭。自定义模式的 `mappings` 是完整替换，空数组不同于 delete；全局模式禁止携带 mappings。

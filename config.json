@@ -1,7 +1,7 @@
 {
     "packageName":  "cc-customization-expert-universal",
-    "version":  "2.2.101-universal",
-    "releaseDate":  "2026-10-20",
+    "version":  "2.2.104-universal",
+    "releaseDate":  "2026-10-22",
     "compatCloudccCliVersion":  "2.5.3",
     "runtime":  "go",
     "domainCatalog":  {
@@ -2498,6 +2498,24 @@
                                          "sourceOfTruth":  "cc-customization-expert-go/config.json",
                                          "policy":  "When an MSAPI skill capability requires a minimum MetadataService server version, record the capability dependency here and keep generated skill package config.json in sync.",
                                          "minimumByCapability":  [
+                                                                     {
+                                                                         "capability":  "msapi.fields.physicalSlotAllocation",
+                                                                         "label":  "Stored-field allocation from actual physical columns",
+                                                                         "introducedInSkillVersion":  "2.2.104-msapi",
+                                                                         "minimumMetadataServiceVersion":  "1.1.88",
+                                                                         "metadataServiceReleaseTag":  "cc-metadata-service-v1.1.88",
+                                                                         "domains":  [
+                                                                                         "fields"
+                                                                                     ],
+                                                                         "operations":  [
+                                                                                            "create",
+                                                                                            "upsert",
+                                                                                            "batch-create",
+                                                                                            "plan",
+                                                                                            "apply"
+                                                                                        ],
+                                                                         "reason":  "Requires stored fields to allocate the lowest available real physical slot, J/A to share the discovered clob_fieldN pool without a fixed J count, and apply-time drift protection."
+                                                                     },
                                                                      {
                                                                          "capability":  "msapi.ccchat.lifecycle",
                                                                          "label":  "CCChat settings and feed-tracking lifecycle",
