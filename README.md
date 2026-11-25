@@ -1,4 +1,4 @@
-# cc-customization-expert-universal v2.3.16-universal
+# cc-customization-expert-universal v2.3.17-universal
 
 关键信息布局使用独立的 `compactLayout` Domain。运行 `cloudcc doc compactLayout devguide` 查看命令、分配约束和 provider 差异。
 
